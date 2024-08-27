@@ -1,0 +1,136 @@
+package com.riskycase.jarvisEnhanced
+
+import android.util.Log
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.*
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.datastore.core.DataStore
+import androidx.datastore.dataStore
+import androidx.lifecycle.ViewModelProvider
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import com.riskycase.jarvisEnhanced.datastore.SettingsSerializer
+import com.riskycase.jarvisEnhanced.datastore.settingsDataStore
+import com.riskycase.jarvisEnhanced.service.NotificationListener
+import com.riskycase.jarvisEnhanced.ui.screen.AddFilterScreen
+import com.riskycase.jarvisEnhanced.ui.screen.FiltersScreen
+import com.riskycase.jarvisEnhanced.ui.screen.HomeScreen
+import com.riskycase.jarvisEnhanced.ui.theme.JarvisTheme
+import com.riskycase.jarvisEnhanced.util.Converter
+import com.riskycase.jarvisEnhanced.util.Destinations.EDIT_FILTER
+import com.riskycase.jarvisEnhanced.util.Destinations.FILTERS
+import com.riskycase.jarvisEnhanced.util.Destinations.HOME
+import com.riskycase.jarvisEnhanced.util.Destinations.SETTINGS
+import com.riskycase.jarvisEnhanced.util.NotificationMaker
+import com.riskycase.jarvisEnhanced.viewModel.AddFilterViewModel
+import com.riskycase.jarvisEnhanced.viewModel.FilterViewModel
+import com.riskycase.jarvisEnhanced.viewModel.SnapViewModel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import java.util.*
+import java.util.logging.Filter
+
+class MainActivity : ComponentActivity() {
+    @OptIn(ExperimentalMaterial3Api::class)
+    override fun onResume() {
+        super.onResume()
+
+        NotificationMaker().setup(applicationContext)
+        NotificationListener().setup(applicationContext)
+        val snapViewModel = ViewModelProvider(this)[SnapViewModel::class.java]
+        val filterViewModel = ViewModelProvider(this)[FilterViewModel::class.java]
+        val addFilterViewModel = ViewModelProvider(this)[AddFilterViewModel::class.java]
+
+        setContent {
+            val navController = rememberNavController()
+            val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+            val scope = rememberCoroutineScope()
+            JarvisTheme {
+                ModalNavigationDrawer(
+                    drawerState = drawerState,
+                    drawerContent = {
+                        ModalDrawerSheet {
+                            Column (
+                                modifier = Modifier
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement
+                                    .spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    getString(R.string.app_name),
+                                    fontSize = 24.sp
+                                )
+                                Divider()
+                                NavigationDrawerItem(
+                                    label = {
+                                        Text("Snap list")
+                                    },
+                                    selected = navController.currentBackStackEntry?.id == HOME,
+                                    onClick = {
+                                        if (navController.currentBackStackEntry?.id != HOME)
+                                            navController.navigate(HOME)
+                                        scope.launch {
+                                            drawerState.close()
+                                        }
+                                    }
+                                )
+                                NavigationDrawerItem(
+                                    label = {
+                                        Text("Filter list")
+                                    },
+                                    selected = navController.currentBackStackEntry?.id == FILTERS,
+                                    onClick = {
+                                        if (navController.currentBackStackEntry?.id != FILTERS)
+                                            navController.navigate(FILTERS)
+                                        scope.launch {
+                                            drawerState.close()
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                )
+                {
+                    NavHost(
+                        navController = navController,
+                        startDestination = HOME
+                    ) {
+                        composable(HOME) {
+                            HomeScreen(
+                                snapViewModel,
+                                navController,
+                                drawerState,
+                                Converter(applicationContext)
+                            )
+                        }
+                        composable(FILTERS) {
+                            FiltersScreen(
+                                filterViewModel,
+                                navController,
+                                drawerState
+                            )
+                        }
+                        composable("$EDIT_FILTER/{filterId}") {
+                            AddFilterScreen(
+                                addFilterViewModel,
+                                navController,
+                                drawerState
+                            )
+                        }
+                        composable(SETTINGS) {}
+                    }
+                }
+            }
+        }
+    }
+}
