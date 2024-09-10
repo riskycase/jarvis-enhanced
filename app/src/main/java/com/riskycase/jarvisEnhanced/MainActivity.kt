@@ -23,6 +23,7 @@ import com.riskycase.jarvisEnhanced.service.NotificationListener
 import com.riskycase.jarvisEnhanced.ui.screen.AddFilterScreen
 import com.riskycase.jarvisEnhanced.ui.screen.FiltersScreen
 import com.riskycase.jarvisEnhanced.ui.screen.HomeScreen
+import com.riskycase.jarvisEnhanced.ui.screen.SettingsScreen
 import com.riskycase.jarvisEnhanced.ui.theme.JarvisTheme
 import com.riskycase.jarvisEnhanced.util.Converter
 import com.riskycase.jarvisEnhanced.util.Destinations.EDIT_FILTER
@@ -32,6 +33,7 @@ import com.riskycase.jarvisEnhanced.util.Destinations.SETTINGS
 import com.riskycase.jarvisEnhanced.util.NotificationMaker
 import com.riskycase.jarvisEnhanced.viewModel.AddFilterViewModel
 import com.riskycase.jarvisEnhanced.viewModel.FilterViewModel
+import com.riskycase.jarvisEnhanced.viewModel.SettingsViewModel
 import com.riskycase.jarvisEnhanced.viewModel.SnapViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -49,6 +51,7 @@ class MainActivity : ComponentActivity() {
         val snapViewModel = ViewModelProvider(this)[SnapViewModel::class.java]
         val filterViewModel = ViewModelProvider(this)[FilterViewModel::class.java]
         val addFilterViewModel = ViewModelProvider(this)[AddFilterViewModel::class.java]
+        val settingsViewModel = ViewModelProvider(this)[SettingsViewModel::class.java]
 
         setContent {
             val navController = rememberNavController()
@@ -59,7 +62,7 @@ class MainActivity : ComponentActivity() {
                     drawerState = drawerState,
                     drawerContent = {
                         ModalDrawerSheet {
-                            Column (
+                            Column(
                                 modifier = Modifier
                                     .padding(16.dp),
                                 verticalArrangement = Arrangement
@@ -127,7 +130,13 @@ class MainActivity : ComponentActivity() {
                                 drawerState
                             )
                         }
-                        composable(SETTINGS) {}
+                        composable(SETTINGS) {
+                            SettingsScreen(
+                                settingsViewModel,
+                                navController,
+                                drawerState
+                            )
+                        }
                     }
                 }
             }

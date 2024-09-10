@@ -1,4 +1,5 @@
 import com.google.protobuf.gradle.*
+import org.jetbrains.kotlin.config.JvmTarget
 
 val protobufVersion = "3.18.0"
 
@@ -15,7 +16,7 @@ android {
 
     defaultConfig {
         applicationId = "com.riskycase.jarvisEnhanced"
-        minSdk = 29
+        minSdk = 30
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -36,11 +37,11 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_18
-        targetCompatibility = JavaVersion.VERSION_18
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "18"
+        jvmTarget = JvmTarget.JVM_17.toString()
     }
     buildFeatures {
         compose = true

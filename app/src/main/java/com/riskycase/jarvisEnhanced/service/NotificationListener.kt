@@ -9,12 +9,15 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.riskycase.jarvisEnhanced.R
 import com.riskycase.jarvisEnhanced.database.AppDatabase
 import com.riskycase.jarvisEnhanced.models.Filter
@@ -43,7 +46,7 @@ class NotificationListener : NotificationListenerService() {
         notificationManager.createNotificationChannel(channel)
     }
 
-    fun makeNotification(context: Context) {
+    fun makeNotificationa(context: Context): Notification {
 
         setup(context)
         val notificationManager: NotificationManager =
@@ -66,7 +69,7 @@ class NotificationListener : NotificationListenerService() {
             .setGroup(Constants.MONITOR_NOTIFICATION_ID)
             .setGroupSummary(true)
 
-        notificationManager.notify(Constants.MONITOR_NOTIFICATION_ID, 1, builder.build())
+        return builder.build()
     }
 
     fun clear(context: Context) {
@@ -75,11 +78,10 @@ class NotificationListener : NotificationListenerService() {
     }
 
     override fun onBind(intent: Intent?): IBinder? {
-        makeNotification(applicationContext)
         NotificationMaker().makeNotification(applicationContext)
         running = true
         appDatabase = AppDatabase.getDatabase(applicationContext)
-        appDatabase.filterDao().getAllLive().observeForever{ filters -> this.filters = filters }
+        appDatabase.filterDao().getAllLive().observeForever { filters -> this.filters = filters }
         return super.onBind(intent)
     }
 
@@ -115,6 +117,17 @@ class NotificationListener : NotificationListenerService() {
         })
 
         super.onCreate()
+
+        ServiceCompat.startForeground(
+            this,
+            Constants.MONITOR_FOREGROUND_NOTIFICATION_ID,
+            makeNotificationa(applicationContext),
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING
+            } else {
+                0
+            }
+        )
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -135,9 +148,15 @@ class NotificationListener : NotificationListenerService() {
             }
             if (matchedFilter != null) {
                 if (matchedFilter.text.contains("$"))
-                    sender = Regex(matchedFilter.text.replace("$", "(.+)")).find(notificationText)?.value
+                    sender =
+                        Regex(matchedFilter.text.replace("$", "(.+)")).find(notificationText)?.value
                 else if (matchedFilter.title.contains("$"))
-                    sender = Regex(matchedFilter.title.replace("$", "(.+)")).find(notificationTitle)?.value
+                    sender = Regex(
+                        matchedFilter.title.replace(
+                            "$",
+                            "(.+)"
+                        )
+                    ).find(notificationTitle)?.value
             }
             if (!sender.isNullOrBlank()) {
                 val snap = Snap(sbn.key.plus("|").plus(sbn.postTime), sender, sbn.postTime)

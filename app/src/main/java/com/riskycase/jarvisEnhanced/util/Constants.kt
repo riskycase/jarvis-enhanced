@@ -5,6 +5,7 @@ class Constants {
         const val SNAPCHAT_PACKAGE_NAME: String = "com.snapchat.android"
         const val MONITOR_NOTIFICATION_ID: String = "monitor"
         const val SNAP_NOTIFICATION_ID: String = "snap"
+        const val MONITOR_FOREGROUND_NOTIFICATION_ID: Int = 1
         const val databaseName: String = "appDatabase"
     }
 }
