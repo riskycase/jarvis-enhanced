@@ -15,7 +15,7 @@ import com.riskycase.jarvisEnhanced.util.Destinations.EDIT_FILTER
 
 @Composable
 fun AddNewFilterItemComponent(navController: NavController) {
-    Column (
+    Column(
         modifier = Modifier
             .padding(16.dp)
             .clickable {

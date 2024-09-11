@@ -6,8 +6,6 @@ import android.content.ComponentName
 import android.content.Intent
 import android.os.Process
 import android.provider.Settings
-import android.service.notification.NotificationListenerService
-import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.AndroidViewModel
 import com.riskycase.jarvisEnhanced.service.NotificationListener

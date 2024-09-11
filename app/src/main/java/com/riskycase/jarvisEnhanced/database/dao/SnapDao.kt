@@ -10,10 +10,13 @@ import com.riskycase.jarvisEnhanced.models.Snap
 interface SnapDao {
     @Insert
     fun add(snap: Snap)
+
     @Query("SELECT * FROM snap ORDER BY sent DESC")
     fun getAll(): List<Snap>
+
     @Query("SELECT * FROM snap ORDER BY sent DESC")
     fun getAllLive(): LiveData<List<Snap>>
+
     @Query("DELETE FROM snap")
     fun clear()
 }

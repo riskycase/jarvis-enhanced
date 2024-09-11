@@ -3,9 +3,7 @@ package com.riskycase.jarvisEnhanced.repository
 import android.app.Application
 import com.riskycase.jarvisEnhanced.database.AppDatabase
 import com.riskycase.jarvisEnhanced.database.dao.FilterDao
-import com.riskycase.jarvisEnhanced.database.dao.SnapDao
 import com.riskycase.jarvisEnhanced.models.Filter
-import com.riskycase.jarvisEnhanced.util.Constants
 
 class FilterRepository(application: Application) {
 

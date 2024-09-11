@@ -7,7 +7,7 @@ import com.riskycase.jarvisEnhanced.models.Snap
 import com.riskycase.jarvisEnhanced.repository.SnapRepository
 import com.riskycase.jarvisEnhanced.util.NotificationMaker
 
-class SnapViewModel(private val application: Application): AndroidViewModel(application) {
+class SnapViewModel(private val application: Application) : AndroidViewModel(application) {
 
     private val snapRepository = SnapRepository(application)
 

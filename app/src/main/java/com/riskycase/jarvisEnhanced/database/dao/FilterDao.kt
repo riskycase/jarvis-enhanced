@@ -1,7 +1,11 @@
 package com.riskycase.jarvisEnhanced.database.dao
 
 import androidx.lifecycle.LiveData
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.Query
+import androidx.room.Update
 import com.riskycase.jarvisEnhanced.models.Filter
 import com.riskycase.jarvisEnhanced.util.Constants
 
@@ -9,18 +13,25 @@ import com.riskycase.jarvisEnhanced.util.Constants
 interface FilterDao {
     @Insert
     fun add(filter: Filter)
+
     @Query("SELECT * FROM filter")
     fun getAll(): List<Filter>
+
     @Query("SELECT * FROM filter")
     fun getAllLive(): LiveData<List<Filter>>
+
     @Query("DELETE FROM filter")
     fun clear()
+
     @Update
     fun update(filter: Filter)
+
     @Delete
     fun delete(filter: Filter)
+
     @Query("SELECT * FROM filter WHERE id = :id")
     fun get(id: Int): Filter
+
     @Query("SELECT * FROM filter WHERE packageName = :packageName")
     fun get(packageName: String): List<Filter>
     fun reset() {

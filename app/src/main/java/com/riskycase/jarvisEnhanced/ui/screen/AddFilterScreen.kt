@@ -8,11 +8,12 @@ import androidx.compose.material3.DrawerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.riskycase.jarvisEnhanced.ui.components.TopBarComponent
 import com.riskycase.jarvisEnhanced.viewModel.AddFilterViewModel
@@ -26,7 +27,7 @@ fun AddFilterScreen(
 ) {
     val filter = addFilterViewModel.currentFilter
     Scaffold(
-        topBar = { TopBarComponent(navController, drawerState,"New filter", false) },
+        topBar = { TopBarComponent(navController, drawerState, "New filter", false) },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = addFilterViewModel::save,
@@ -39,8 +40,18 @@ fun AddFilterScreen(
             modifier = Modifier
                 .padding(innerPadding)
         ) {
-            Text("Title")
-            TextField(value = filter.value!!.title, onValueChange = {title -> filter.value?.title = title })
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Title", modifier = Modifier.padding(0.dp, 8.dp))
+                OutlinedTextField(
+                    value = filter.value!!.title,
+                    onValueChange = { filter.value!!.title = it })
+            }
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Text", modifier = Modifier.padding(0.dp, 8.dp))
+                OutlinedTextField(
+                    value = filter.value!!.text,
+                    onValueChange = { filter.value?.text = it })
+            }
         }
     }
 }

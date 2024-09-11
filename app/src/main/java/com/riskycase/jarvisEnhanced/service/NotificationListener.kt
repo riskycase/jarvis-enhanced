@@ -19,17 +19,19 @@ import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.riskycase.jarvisEnhanced.R
-import com.riskycase.jarvisEnhanced.database.AppDatabase
 import com.riskycase.jarvisEnhanced.models.Filter
 import com.riskycase.jarvisEnhanced.models.Snap
+import com.riskycase.jarvisEnhanced.repository.FilterRepository
+import com.riskycase.jarvisEnhanced.repository.SnapRepository
 import com.riskycase.jarvisEnhanced.util.Constants
 import com.riskycase.jarvisEnhanced.util.NotificationMaker
 
 class NotificationListener : NotificationListenerService() {
 
-    private lateinit var appDatabase: AppDatabase
     var running: Boolean = false
     lateinit var filters: List<Filter>
+    private lateinit var filterRepository: FilterRepository
+    private lateinit var snapRepository: SnapRepository
 
     fun setup(context: Context) {
         val notificationManager: NotificationManager =
@@ -78,10 +80,10 @@ class NotificationListener : NotificationListenerService() {
     }
 
     override fun onBind(intent: Intent?): IBinder? {
-        NotificationMaker().makeNotification(applicationContext)
+        NotificationMaker().makeNotification(applicationContext, application)
         running = true
-        appDatabase = AppDatabase.getDatabase(applicationContext)
-        appDatabase.filterDao().getAllLive().observeForever { filters -> this.filters = filters }
+        filterRepository = FilterRepository(application)
+        filterRepository.allFilters.observeForever { filters -> this.filters = filters }
         return super.onBind(intent)
     }
 
@@ -92,7 +94,7 @@ class NotificationListener : NotificationListenerService() {
     }
 
     override fun onCreate() {
-        appDatabase = AppDatabase.getDatabase(applicationContext)
+        snapRepository = SnapRepository(application)
         val mainHandler = Handler(Looper.getMainLooper())
 
         mainHandler.post(object : Runnable {
@@ -108,7 +110,7 @@ class NotificationListener : NotificationListenerService() {
                     if (event.packageName == Constants.SNAPCHAT_PACKAGE_NAME && event.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
                         NotificationMaker().clear(applicationContext)
                         Thread {
-                            appDatabase.snapDao().clear()
+                            snapRepository.clear()
                         }.start()
                     }
                 }
@@ -161,9 +163,9 @@ class NotificationListener : NotificationListenerService() {
             if (!sender.isNullOrBlank()) {
                 val snap = Snap(sbn.key.plus("|").plus(sbn.postTime), sender, sbn.postTime)
                 Thread {
-                    appDatabase.snapDao().add(snap)
+                    snapRepository.add(snap)
                     super.cancelNotification(sbn.key)
-                    NotificationMaker().makeNotification(applicationContext)
+                    NotificationMaker().makeNotification(applicationContext, application)
                 }.start()
             }
         }

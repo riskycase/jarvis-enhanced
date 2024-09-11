@@ -8,4 +8,5 @@ data class Filter(
     @PrimaryKey(autoGenerate = true) var id: Int,
     var title: String,
     var text: String,
-    var packageName: String)
+    var packageName: String
+)

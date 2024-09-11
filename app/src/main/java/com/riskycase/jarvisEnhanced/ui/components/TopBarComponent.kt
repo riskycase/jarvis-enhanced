@@ -18,12 +18,15 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.riskycase.jarvisEnhanced.util.Destinations.SETTINGS
 import kotlinx.coroutines.launch
-import kotlin.coroutines.coroutineContext
-import kotlin.coroutines.startCoroutine
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TopBarComponent(navController: NavController, drawerState: DrawerState, title: String, isMainScreen: Boolean) {
+fun TopBarComponent(
+    navController: NavController,
+    drawerState: DrawerState,
+    title: String,
+    isMainScreen: Boolean
+) {
     val coroutineScope = rememberCoroutineScope()
     TopAppBar(
         colors = TopAppBarDefaults.smallTopAppBarColors(
@@ -32,14 +35,24 @@ fun TopBarComponent(navController: NavController, drawerState: DrawerState, titl
             navigationIconContentColor = MaterialTheme.colorScheme.primary
         ),
         navigationIcon = {
-            if(isMainScreen)
+            if (isMainScreen)
                 IconButton(onClick = {
                     coroutineScope.launch { drawerState.open() }
-                }) { Icon(imageVector = Icons.Filled.Menu, contentDescription = "Open side drawer") }
+                }) {
+                    Icon(
+                        imageVector = Icons.Filled.Menu,
+                        contentDescription = "Open side drawer"
+                    )
+                }
             else
                 IconButton(onClick = {
                     navController.popBackStack()
-                }) { Icon(imageVector = Icons.Filled.ArrowBack, contentDescription = "Go to previous screen") }
+                }) {
+                    Icon(
+                        imageVector = Icons.Filled.ArrowBack,
+                        contentDescription = "Go to previous screen"
+                    )
+                }
         },
         title = { Text(title, fontSize = 24.sp) },
         actions = {

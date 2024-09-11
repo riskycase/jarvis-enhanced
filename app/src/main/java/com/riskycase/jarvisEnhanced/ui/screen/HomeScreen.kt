@@ -31,34 +31,25 @@ fun HomeScreen(
     converter: Converter
 ) {
     val snaps = snapViewModel.getAllSnaps().observeAsState(emptyList())
-    Scaffold(
-        topBar = { TopBarComponent(navController, drawerState,"Snaps", true) },
+    Scaffold(topBar = { TopBarComponent(navController, drawerState, "Snaps", true) },
         floatingActionButton = {
-            if (snaps.value.isNotEmpty())
-                ExtendedFloatingActionButton(
-                    onClick = {
-                        snapViewModel.clear()
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Clear,
-                        contentDescription = "Clear snaps"
-                    )
-                    Text("Clear all", modifier = Modifier.padding(4.dp))
-                }
-        }
-    ) { innerPadding ->
+            if (snaps.value.isNotEmpty()) ExtendedFloatingActionButton(onClick = {
+                snapViewModel.clear()
+            }) {
+                Icon(
+                    imageVector = Icons.Filled.Clear, contentDescription = "Clear snaps"
+                )
+                Text("Clear all", modifier = Modifier.padding(4.dp))
+            }
+        }) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxWidth(1f)
         ) {
-            items(
-                items = snaps.value,
-                itemContent = { snap: Snap ->
-                    converter.SnapToSnapItemComponent(snap)
-                }
-            )
+            items(items = snaps.value, itemContent = { snap: Snap ->
+                converter.SnapToSnapItemComponent(snap)
+            })
         }
     }
 }

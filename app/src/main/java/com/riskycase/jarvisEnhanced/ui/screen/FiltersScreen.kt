@@ -30,7 +30,7 @@ fun FiltersScreen(
 ) {
     val filters = filterViewModel.getAllFilters().observeAsState(emptyList())
     Scaffold(
-        topBar = { TopBarComponent(navController, drawerState,"Filters", true) },
+        topBar = { TopBarComponent(navController, drawerState, "Filters", true) },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = filterViewModel::reset,
@@ -50,7 +50,7 @@ fun FiltersScreen(
                     FilterListItemComponent(filter, navController)
                 },
 
-            )
+                )
             item {
                 AddNewFilterItemComponent(
                     navController

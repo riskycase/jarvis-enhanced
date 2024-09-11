@@ -1,11 +1,14 @@
 package com.riskycase.jarvisEnhanced.util
 
-import android.app.*
+import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationChannelGroup
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import androidx.core.app.NotificationCompat
-import androidx.room.Room
 import com.riskycase.jarvisEnhanced.R
-import com.riskycase.jarvisEnhanced.database.AppDatabase
+import com.riskycase.jarvisEnhanced.repository.SnapRepository
 
 class NotificationMaker {
 
@@ -24,18 +27,18 @@ class NotificationMaker {
         notificationManager.createNotificationChannel(channel)
     }
 
-    fun makeNotification(context: Context) {
+    fun makeNotification(context: Context, application: Application) {
 
         setup(context)
         val notificationManager: NotificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         Thread {
-            val appDatabase = AppDatabase.getDatabase(context)
+            val snapRepository = SnapRepository(application)
 
-            val snaps = appDatabase.snapDao().getAll()
+            val snaps = snapRepository.allSnaps.value!!
 
-            if(snaps.isNotEmpty()) {
+            if (snaps.isNotEmpty()) {
 
                 val senders = mutableMapOf<String, Int>()
 

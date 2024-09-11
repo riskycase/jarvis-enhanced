@@ -7,4 +7,5 @@ import androidx.room.PrimaryKey
 data class Snap(
     @PrimaryKey val key: String,
     val sender: String,
-    val sent: Long)
+    val sent: Long
+)

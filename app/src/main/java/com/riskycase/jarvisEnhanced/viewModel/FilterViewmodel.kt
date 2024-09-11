@@ -4,12 +4,9 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import com.riskycase.jarvisEnhanced.models.Filter
-import com.riskycase.jarvisEnhanced.models.Snap
 import com.riskycase.jarvisEnhanced.repository.FilterRepository
-import com.riskycase.jarvisEnhanced.repository.SnapRepository
-import com.riskycase.jarvisEnhanced.util.NotificationMaker
 
-class FilterViewModel(private val application: Application): AndroidViewModel(application) {
+class FilterViewModel(private val application: Application) : AndroidViewModel(application) {
 
     private val filterRepository = FilterRepository(application)
 
