@@ -26,8 +26,8 @@ interface FilterDao {
     @Update
     fun update(filter: Filter)
 
-    @Delete
-    fun delete(filter: Filter)
+    @Query("DELETE FROM filter WHERE id = :id")
+    fun delete(id: Int)
 
     @Query("SELECT * FROM filter WHERE id = :id")
     fun get(id: Int): Filter

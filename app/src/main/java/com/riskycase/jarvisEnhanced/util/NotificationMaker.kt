@@ -36,7 +36,7 @@ class NotificationMaker {
         Thread {
             val snapRepository = SnapRepository(application)
 
-            val snaps = snapRepository.allSnaps.value!!
+            val snaps = snapRepository.allSnaps()
 
             if (snaps.isNotEmpty()) {
 

@@ -20,10 +20,8 @@ class SettingsViewModel(private val application: Application) : AndroidViewModel
     fun openNotificationListenerSettings() {
         val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
         intent.putExtra(
-            Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
-            ComponentName(
-                application.packageName,
-                NotificationListener::class.java.name
+            Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, ComponentName(
+                application.packageName, NotificationListener::class.java.name
             ).flattenToString()
         )
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -35,9 +33,7 @@ class SettingsViewModel(private val application: Application) : AndroidViewModel
     fun getUsageAccessEnabled(): Boolean {
         return application.applicationContext.getSystemService(AppOpsManager::class.java)
             .unsafeCheckOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                application.packageName
+                AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), application.packageName
             ) == AppOpsManager.MODE_ALLOWED
     }
 
@@ -47,6 +43,15 @@ class SettingsViewModel(private val application: Application) : AndroidViewModel
         application.startActivity(
             intent
         )
+    }
+
+    fun refreshSnaps() {
+        NotificationListener().readPendingSnaps(application.applicationContext, application)
+    }
+
+    fun restartService() {
+        // FIXME: This crashes the app with java.lang.NullPointerException: class name is null
+//        NotificationListener().goForeground(application.applicationContext)
     }
 
 }

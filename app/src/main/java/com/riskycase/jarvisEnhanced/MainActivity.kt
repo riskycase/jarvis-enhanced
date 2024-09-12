@@ -99,6 +99,20 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 )
+                                Divider()
+                                NavigationDrawerItem(
+                                    label = {
+                                        Text("Settings")
+                                    },
+                                    selected = navController.currentBackStackEntry?.id == SETTINGS,
+                                    onClick = {
+                                        if (navController.currentBackStackEntry?.id != SETTINGS)
+                                            navController.navigate(SETTINGS)
+                                        scope.launch {
+                                            drawerState.close()
+                                        }
+                                    }
+                                )
                             }
                         }
                     }

@@ -2,6 +2,7 @@ package com.riskycase.jarvisEnhanced.ui.components
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -17,4 +18,5 @@ fun SnapListItemComponent(sender: String, time: String) {
         Text(sender, fontSize = 24.sp)
         Text(time)
     }
+    Divider()
 }

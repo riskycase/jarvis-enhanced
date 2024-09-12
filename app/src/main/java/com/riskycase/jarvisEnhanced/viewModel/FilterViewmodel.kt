@@ -6,7 +6,7 @@ import androidx.lifecycle.LiveData
 import com.riskycase.jarvisEnhanced.models.Filter
 import com.riskycase.jarvisEnhanced.repository.FilterRepository
 
-class FilterViewModel(private val application: Application) : AndroidViewModel(application) {
+class FilterViewModel(application: Application) : AndroidViewModel(application) {
 
     private val filterRepository = FilterRepository(application)
 
@@ -17,6 +17,12 @@ class FilterViewModel(private val application: Application) : AndroidViewModel(a
     fun reset() {
         Thread {
             filterRepository.reset()
+        }.start()
+    }
+
+    fun deleteFilter(id: Int) {
+        Thread {
+            filterRepository.delete(id)
         }.start()
     }
 

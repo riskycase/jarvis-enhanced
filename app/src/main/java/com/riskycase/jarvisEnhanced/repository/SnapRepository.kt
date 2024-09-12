@@ -9,7 +9,11 @@ class SnapRepository(application: Application) {
 
     private val snapDao: SnapDao = AppDatabase.getDatabase(application).snapDao()
 
-    val allSnaps = snapDao.getAllLive()
+    val allSnapsLive = snapDao.getAllLive()
+
+    fun allSnaps(): List<Snap> {
+        return  snapDao.getAll()
+    }
 
     fun add(snap: Snap) {
         return snapDao.add(snap)

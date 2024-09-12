@@ -24,21 +24,15 @@ import com.riskycase.jarvisEnhanced.viewModel.FilterViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FiltersScreen(
-    filterViewModel: FilterViewModel,
-    navController: NavController,
-    drawerState: DrawerState
+    filterViewModel: FilterViewModel, navController: NavController, drawerState: DrawerState
 ) {
     val filters = filterViewModel.getAllFilters().observeAsState(emptyList())
-    Scaffold(
-        topBar = { TopBarComponent(navController, drawerState, "Filters", true) },
+    Scaffold(topBar = { TopBarComponent(navController, drawerState, "Filters", true) },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = filterViewModel::reset,
+            ExtendedFloatingActionButton(onClick = filterViewModel::reset,
                 icon = { Icon(Icons.Filled.Refresh, "Reset filters") },
-                text = { Text("Reset filters") }
-            )
-        }
-    ) { innerPadding ->
+                text = { Text("Reset filters") })
+        }) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .padding(innerPadding)
@@ -46,11 +40,12 @@ fun FiltersScreen(
         ) {
             items(
                 items = filters.value,
-                itemContent = { filter ->
-                    FilterListItemComponent(filter, navController)
-                },
 
-                )
+                ) { filter ->
+                FilterListItemComponent(
+                    filter, navController
+                ) { filterViewModel.deleteFilter(filter.id) }
+            }
             item {
                 AddNewFilterItemComponent(
                     navController

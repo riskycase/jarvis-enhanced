@@ -16,7 +16,11 @@ class FilterRepository(application: Application) {
     }
 
     fun add(filter: Filter) {
-        filterDao.add(filter)
+        if (filter.id == 0) filterDao.add(filter) else filterDao.update(filter)
+    }
+
+    fun delete(id: Int) {
+        filterDao.delete(id)
     }
 
     fun getFilter(id: Int): Filter {

@@ -12,7 +12,7 @@ class SnapViewModel(private val application: Application) : AndroidViewModel(app
     private val snapRepository = SnapRepository(application)
 
     fun getAllSnaps(): LiveData<List<Snap>> {
-        return snapRepository.allSnaps
+        return snapRepository.allSnapsLive
     }
 
     fun clear() {
@@ -20,6 +20,10 @@ class SnapViewModel(private val application: Application) : AndroidViewModel(app
             snapRepository.clear()
             NotificationMaker().clear(application)
         }.start()
+    }
+
+    fun refreshSnaps() {
+
     }
 
 }

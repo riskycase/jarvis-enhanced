@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Divider
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
@@ -36,11 +37,11 @@ fun SettingsScreen(
         ) {
             Column(
                 modifier = Modifier
-                    .padding(16.dp)
                     .clickable {
                         settingsViewModel.openNotificationListenerSettings()
                     }
-                    .width(IntrinsicSize.Max)
+                    .padding(16.dp)
+                    .fillMaxWidth(1f)
             ) {
                 Text("Notification Access", fontSize = 24.sp)
                 if (settingsViewModel.getNotificationListenerServiceEnabled()) Text(
@@ -48,19 +49,42 @@ fun SettingsScreen(
                     color = Color.Green
                 ) else Text("Not granted", color = Color.Red)
             }
+            Divider()
             Column(
                 modifier = Modifier
-                    .padding(16.dp)
                     .clickable {
                         settingsViewModel.openUsageAccessSettings()
                     }
-                    .width(IntrinsicSize.Max)
+                    .padding(16.dp)
+                    .fillMaxWidth(1f)
             ) {
                 Text("Usage Access", fontSize = 24.sp)
                 if (settingsViewModel.getUsageAccessEnabled()) Text(
                     "Granted",
                     color = Color.Green
                 ) else Text("Not granted", color = Color.Red)
+            }
+            Divider()
+            Column(
+                modifier = Modifier
+                    .clickable {
+                        settingsViewModel.refreshSnaps()
+                    }
+                    .padding(16.dp)
+                    .fillMaxWidth(1f)
+            ) {
+                Text("Refresh snaps", fontSize = 20.sp)
+            }
+            Divider()
+            Column(
+                modifier = Modifier
+                    .clickable {
+                        settingsViewModel.restartService()
+                    }
+                    .padding(16.dp)
+                    .fillMaxWidth(1f)
+            ) {
+                Text("Restart listener service", fontSize = 20.sp)
             }
         }
     }

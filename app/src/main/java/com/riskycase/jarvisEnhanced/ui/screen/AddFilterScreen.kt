@@ -21,36 +21,27 @@ import com.riskycase.jarvisEnhanced.viewModel.AddFilterViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddFilterScreen(
-    addFilterViewModel: AddFilterViewModel,
-    navController: NavController,
-    drawerState: DrawerState
+    addFilterViewModel: AddFilterViewModel, navController: NavController, drawerState: DrawerState
 ) {
-    val filter = addFilterViewModel.currentFilter
-    Scaffold(
-        topBar = { TopBarComponent(navController, drawerState, "New filter", false) },
+    Scaffold(topBar = { TopBarComponent(navController, drawerState, "New filter", false) },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = addFilterViewModel::save,
-                icon = { Icon(Icons.Filled.Check, "Save filter") },
-                text = { Text("Save") }
-            )
-        }
-    ) { innerPadding ->
+            ExtendedFloatingActionButton(onClick = {
+                addFilterViewModel.save()
+                navController.popBackStack()
+            }, icon = { Icon(Icons.Filled.Check, "Save filter") }, text = { Text("Save") })
+        }) { innerPadding ->
         Column(
-            modifier = Modifier
-                .padding(innerPadding)
+            modifier = Modifier.padding(innerPadding)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Title", modifier = Modifier.padding(0.dp, 8.dp))
-                OutlinedTextField(
-                    value = filter.value!!.title,
-                    onValueChange = { filter.value!!.title = it })
+                OutlinedTextField(value = addFilterViewModel.currentFilterTitle,
+                    onValueChange = addFilterViewModel::setTitle,
+                    label = { Text("Title") })
             }
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Text", modifier = Modifier.padding(0.dp, 8.dp))
-                OutlinedTextField(
-                    value = filter.value!!.text,
-                    onValueChange = { filter.value?.text = it })
+                OutlinedTextField(value = addFilterViewModel.currentFilterText,
+                    onValueChange = addFilterViewModel::setText,
+                    label = { Text("Text") })
             }
         }
     }

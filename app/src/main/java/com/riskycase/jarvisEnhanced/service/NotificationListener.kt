@@ -1,5 +1,6 @@
 package com.riskycase.jarvisEnhanced.service
 
+import android.app.Application
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationChannelGroup
@@ -28,8 +29,8 @@ import com.riskycase.jarvisEnhanced.util.NotificationMaker
 
 class NotificationListener : NotificationListenerService() {
 
-    var running: Boolean = false
-    lateinit var filters: List<Filter>
+    private var running: Boolean = false
+    private lateinit var filters: List<Filter>
     private lateinit var filterRepository: FilterRepository
     private lateinit var snapRepository: SnapRepository
 
@@ -37,9 +38,7 @@ class NotificationListener : NotificationListenerService() {
         val notificationManager: NotificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channel = NotificationChannel(
-            "monitor",
-            "Monitoring notification",
-            NotificationManager.IMPORTANCE_NONE
+            "monitor", "Monitoring notification", NotificationManager.IMPORTANCE_NONE
         )
         channel.description = "Channel for persistent notification to keep monitoring alive"
         channel.group = "system"
@@ -48,35 +47,86 @@ class NotificationListener : NotificationListenerService() {
         notificationManager.createNotificationChannel(channel)
     }
 
-    fun makeNotificationa(context: Context): Notification {
+    private fun makeNotification(context: Context): Notification {
 
         setup(context)
-        val notificationManager: NotificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        val builder = NotificationCompat.Builder(context, "monitor")
-            .setSmallIcon(R.drawable.ic_snapchat_icon)
-            .setContentTitle("Monitoring for new messages")
-            .setAutoCancel(false)
-            .setContentIntent(
-                PendingIntent.getActivity(
-                    context,
-                    0,
-                    context.packageManager.getLaunchIntentForPackage(packageName),
-                    PendingIntent.FLAG_IMMUTABLE
-                )
-            )
-            .setChannelId("monitor")
-            .setOngoing(true)
-            .setGroup(Constants.MONITOR_NOTIFICATION_ID)
-            .setGroupSummary(true)
+        val builder =
+            NotificationCompat.Builder(context, "monitor").setSmallIcon(R.drawable.ic_snapchat_icon)
+                .setContentTitle("Monitoring for new messages").setAutoCancel(false)
+                .setContentIntent(
+                    PendingIntent.getActivity(
+                        context,
+                        0,
+                        context.packageManager.getLaunchIntentForPackage(context.packageName),
+                        PendingIntent.FLAG_IMMUTABLE
+                    )
+                ).setChannelId("monitor").setOngoing(true)
+                .setGroup(Constants.MONITOR_NOTIFICATION_ID).setGroupSummary(true)
 
         return builder.build()
     }
 
-    fun clear(context: Context) {
-        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .cancel(Constants.MONITOR_NOTIFICATION_ID, 1)
+    private fun clear(context: Context) {
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(
+            Constants.MONITOR_NOTIFICATION_ID, 1
+        )
+    }
+
+    private fun getSender(sbn: StatusBarNotification): String? {
+        var sender: String? = null
+        val snapchatFilters =
+            filters.filter { filter -> filter.packageName == Constants.SNAPCHAT_PACKAGE_NAME }
+        val notificationText =
+            sbn.notification.extras.getString(Notification.EXTRA_TEXT, "default value")
+        val notificationTitle =
+            sbn.notification.extras.getString(Notification.EXTRA_TITLE, "default value")
+        val matchedFilter = snapchatFilters.find { filter ->
+            notificationText.matches(
+                Regex(filter.text.replace("$", "(.+)"))
+            ) && notificationTitle.matches(
+                Regex(filter.title.replace("$", "(.+)"))
+            )
+        }
+        if (matchedFilter != null) {
+            if (matchedFilter.text.contains("$")) sender =
+                Regex(matchedFilter.text.replace("$", "(.+)")).find(notificationText)?.value
+            else if (matchedFilter.title.contains("$")) sender = Regex(
+                matchedFilter.title.replace(
+                    "$", "(.+)"
+                )
+            ).find(notificationTitle)?.value
+        }
+        return sender
+    }
+
+    fun goForeground(context: Context) {
+        ServiceCompat.startForeground(
+            this,
+            Constants.MONITOR_FOREGROUND_NOTIFICATION_ID,
+            makeNotification(context),
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING
+            } else {
+                0
+            }
+        )
+
+    }
+
+    fun readPendingSnaps(context: Context, application: Application) {
+
+        snapRepository = SnapRepository(application)
+        filterRepository = FilterRepository(application)
+        filterRepository.allFilters.observeForever { filters -> this.filters = filters }
+
+        activeNotifications.filter { it.packageName == Constants.SNAPCHAT_PACKAGE_NAME || it.packageName == "net.dinglisch.android.taskerm" }
+            .map {
+                val sender = getSender(it)
+                if (sender.isNullOrBlank()) return@map null
+                return@map Snap(it.key.plus("|").plus(it.postTime), sender, it.postTime)
+            }.filterNotNull().forEach(snapRepository::add)
+        NotificationMaker().makeNotification(context, application)
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -101,8 +151,7 @@ class NotificationListener : NotificationListenerService() {
             override fun run() {
                 val events =
                     (applicationContext.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager).queryEvents(
-                        System.currentTimeMillis() - 1000,
-                        System.currentTimeMillis()
+                        System.currentTimeMillis() - 1000, System.currentTimeMillis()
                     )
                 while (events.hasNextEvent()) {
                     val event = UsageEvents.Event()
@@ -120,46 +169,12 @@ class NotificationListener : NotificationListenerService() {
 
         super.onCreate()
 
-        ServiceCompat.startForeground(
-            this,
-            Constants.MONITOR_FOREGROUND_NOTIFICATION_ID,
-            makeNotificationa(applicationContext),
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING
-            } else {
-                0
-            }
-        )
+        goForeground(applicationContext)
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (sbn.packageName == Constants.SNAPCHAT_PACKAGE_NAME || sbn.packageName == "net.dinglisch.android.taskerm") {
-            var sender: String? = null
-            val snapchatFilters =
-                filters.filter { filter -> filter.packageName == Constants.SNAPCHAT_PACKAGE_NAME }
-            val notificationText =
-                sbn.notification.extras.getString(Notification.EXTRA_TEXT, "default value")
-            val notificationTitle =
-                sbn.notification.extras.getString(Notification.EXTRA_TITLE, "default value")
-            val matchedFilter = snapchatFilters.find { filter ->
-                notificationText.matches(
-                    Regex(filter.text.replace("$", "(.+)"))
-                ) && notificationTitle.matches(
-                    Regex(filter.title.replace("$", "(.+)"))
-                )
-            }
-            if (matchedFilter != null) {
-                if (matchedFilter.text.contains("$"))
-                    sender =
-                        Regex(matchedFilter.text.replace("$", "(.+)")).find(notificationText)?.value
-                else if (matchedFilter.title.contains("$"))
-                    sender = Regex(
-                        matchedFilter.title.replace(
-                            "$",
-                            "(.+)"
-                        )
-                    ).find(notificationTitle)?.value
-            }
+            val sender = getSender(sbn)
             if (!sender.isNullOrBlank()) {
                 val snap = Snap(sbn.key.plus("|").plus(sbn.postTime), sender, sbn.postTime)
                 Thread {
