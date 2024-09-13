@@ -1,52 +1,58 @@
 package com.riskycase.jarvisEnhanced.viewModel
 
 import android.app.AppOpsManager
-import android.app.Application
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.os.Process
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import com.riskycase.jarvisEnhanced.service.NotificationListener
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
 
-class SettingsViewModel(private val application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class SettingsViewModel @Inject constructor(
+    @ApplicationContext private val applicationContext: Context,
+    private val notificationListener: NotificationListener
+) : ViewModel() {
 
     fun getNotificationListenerServiceEnabled(): Boolean {
-        return NotificationManagerCompat.getEnabledListenerPackages(application.applicationContext)
-            .contains(application.packageName)
+        return NotificationManagerCompat.getEnabledListenerPackages(applicationContext)
+            .contains(applicationContext.packageName)
     }
 
     fun openNotificationListenerSettings() {
         val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
         intent.putExtra(
             Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, ComponentName(
-                application.packageName, NotificationListener::class.java.name
+                applicationContext.packageName, NotificationListener::class.java.name
             ).flattenToString()
         )
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        application.startActivity(
+        applicationContext.startActivity(
             intent
         )
     }
 
     fun getUsageAccessEnabled(): Boolean {
-        return application.applicationContext.getSystemService(AppOpsManager::class.java)
-            .unsafeCheckOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), application.packageName
-            ) == AppOpsManager.MODE_ALLOWED
+        return applicationContext.getSystemService(AppOpsManager::class.java).unsafeCheckOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), applicationContext.packageName
+        ) == AppOpsManager.MODE_ALLOWED
     }
 
     fun openUsageAccessSettings() {
         val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        application.startActivity(
+        applicationContext.startActivity(
             intent
         )
     }
 
     fun refreshSnaps() {
-        NotificationListener().readPendingSnaps(application.applicationContext, application)
+        notificationListener.readPendingSnaps()
     }
 
     fun restartService() {

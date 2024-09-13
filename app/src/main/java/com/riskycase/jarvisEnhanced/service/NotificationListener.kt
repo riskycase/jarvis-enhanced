@@ -1,6 +1,5 @@
 package com.riskycase.jarvisEnhanced.service
 
-import android.app.Application
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationChannelGroup
@@ -20,21 +19,39 @@ import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.riskycase.jarvisEnhanced.R
+import com.riskycase.jarvisEnhanced.datastore.settingsDataStore
 import com.riskycase.jarvisEnhanced.models.Filter
 import com.riskycase.jarvisEnhanced.models.Snap
 import com.riskycase.jarvisEnhanced.repository.FilterRepository
 import com.riskycase.jarvisEnhanced.repository.SnapRepository
 import com.riskycase.jarvisEnhanced.util.Constants
 import com.riskycase.jarvisEnhanced.util.NotificationMaker
+import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
+import javax.inject.Inject
 
-class NotificationListener : NotificationListenerService() {
+@AndroidEntryPoint
+class NotificationListener @Inject constructor() : NotificationListenerService() {
 
-    private var running: Boolean = false
     private lateinit var filters: List<Filter>
-    private lateinit var filterRepository: FilterRepository
-    private lateinit var snapRepository: SnapRepository
 
-    fun setup(context: Context) {
+    @Inject
+    lateinit var filterRepository: FilterRepository
+
+    @Inject
+    lateinit var snapRepository: SnapRepository
+
+    @Inject
+    lateinit var notificationMaker: NotificationMaker
+
+    @Inject
+    @ApplicationContext
+    lateinit var context: Context
+
+    fun setup() {
         val notificationManager: NotificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channel = NotificationChannel(
@@ -47,10 +64,8 @@ class NotificationListener : NotificationListenerService() {
         notificationManager.createNotificationChannel(channel)
     }
 
-    private fun makeNotification(context: Context): Notification {
-
-        setup(context)
-
+    private fun makeNotification(): Notification {
+        setup()
         val builder =
             NotificationCompat.Builder(context, "monitor").setSmallIcon(R.drawable.ic_snapchat_icon)
                 .setContentTitle("Monitoring for new messages").setAutoCancel(false)
@@ -67,7 +82,7 @@ class NotificationListener : NotificationListenerService() {
         return builder.build()
     }
 
-    private fun clear(context: Context) {
+    private fun clear() {
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(
             Constants.MONITOR_NOTIFICATION_ID, 1
         )
@@ -100,11 +115,11 @@ class NotificationListener : NotificationListenerService() {
         return sender
     }
 
-    fun goForeground(context: Context) {
+    fun goForeground() {
         ServiceCompat.startForeground(
             this,
             Constants.MONITOR_FOREGROUND_NOTIFICATION_ID,
-            makeNotification(context),
+            makeNotification(),
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING
             } else {
@@ -114,10 +129,8 @@ class NotificationListener : NotificationListenerService() {
 
     }
 
-    fun readPendingSnaps(context: Context, application: Application) {
+    fun readPendingSnaps() {
 
-        snapRepository = SnapRepository(application)
-        filterRepository = FilterRepository(application)
         filterRepository.allFilters.observeForever { filters -> this.filters = filters }
 
         activeNotifications.filter { it.packageName == Constants.SNAPCHAT_PACKAGE_NAME || it.packageName == "net.dinglisch.android.taskerm" }
@@ -126,25 +139,21 @@ class NotificationListener : NotificationListenerService() {
                 if (sender.isNullOrBlank()) return@map null
                 return@map Snap(it.key.plus("|").plus(it.postTime), sender, it.postTime)
             }.filterNotNull().forEach(snapRepository::add)
-        NotificationMaker().makeNotification(context, application)
+        notificationMaker.makeNotification()
     }
 
     override fun onBind(intent: Intent?): IBinder? {
-        NotificationMaker().makeNotification(applicationContext, application)
-        running = true
-        filterRepository = FilterRepository(application)
+        notificationMaker.makeNotification()
         filterRepository.allFilters.observeForever { filters -> this.filters = filters }
         return super.onBind(intent)
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
-        clear(applicationContext)
-        running = false
+        clear()
         return super.onUnbind(intent)
     }
 
     override fun onCreate() {
-        snapRepository = SnapRepository(application)
         val mainHandler = Handler(Looper.getMainLooper())
 
         mainHandler.post(object : Runnable {
@@ -157,19 +166,22 @@ class NotificationListener : NotificationListenerService() {
                     val event = UsageEvents.Event()
                     events.getNextEvent(event)
                     if (event.packageName == Constants.SNAPCHAT_PACKAGE_NAME && event.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
-                        NotificationMaker().clear(applicationContext)
+                        notificationMaker.clear()
                         Thread {
                             snapRepository.clear()
                         }.start()
                     }
                 }
-                mainHandler.postDelayed(this, 500)
+                mainHandler.postDelayed(this, runBlocking {
+                    applicationContext.settingsDataStore.data.map { settings -> if (settings.hasCheckDurationMilliseconds()) settings.checkDurationMilliseconds else 500 }
+                        .first().toLong()
+                })
             }
         })
 
         super.onCreate()
 
-        goForeground(applicationContext)
+        goForeground()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -180,7 +192,7 @@ class NotificationListener : NotificationListenerService() {
                 Thread {
                     snapRepository.add(snap)
                     super.cancelNotification(sbn.key)
-                    NotificationMaker().makeNotification(applicationContext, application)
+                    notificationMaker.makeNotification()
                 }.start()
             }
         }

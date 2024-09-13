@@ -1,14 +1,15 @@
 package com.riskycase.jarvisEnhanced.viewModel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
+import androidx.lifecycle.ViewModel
 import com.riskycase.jarvisEnhanced.models.Filter
 import com.riskycase.jarvisEnhanced.repository.FilterRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class FilterViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val filterRepository = FilterRepository(application)
+@HiltViewModel
+class FilterViewModel @Inject constructor(private val filterRepository: FilterRepository) :
+    ViewModel() {
 
     fun getAllFilters(): LiveData<List<Filter>> {
         return filterRepository.allFilters

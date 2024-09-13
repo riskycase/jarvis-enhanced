@@ -12,6 +12,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -23,6 +25,8 @@ import com.riskycase.jarvisEnhanced.viewModel.AddFilterViewModel
 fun AddFilterScreen(
     addFilterViewModel: AddFilterViewModel, navController: NavController, drawerState: DrawerState
 ) {
+    val title by addFilterViewModel.currentFilterTitle.collectAsState()
+    val text by addFilterViewModel.currentFilterText.collectAsState()
     Scaffold(topBar = { TopBarComponent(navController, drawerState, "New filter", false) },
         floatingActionButton = {
             ExtendedFloatingActionButton(onClick = {
@@ -34,12 +38,12 @@ fun AddFilterScreen(
             modifier = Modifier.padding(innerPadding)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                OutlinedTextField(value = addFilterViewModel.currentFilterTitle,
+                OutlinedTextField(value = title,
                     onValueChange = addFilterViewModel::setTitle,
                     label = { Text("Title") })
             }
             Column(modifier = Modifier.padding(16.dp)) {
-                OutlinedTextField(value = addFilterViewModel.currentFilterText,
+                OutlinedTextField(value = text,
                     onValueChange = addFilterViewModel::setText,
                     label = { Text("Text") })
             }

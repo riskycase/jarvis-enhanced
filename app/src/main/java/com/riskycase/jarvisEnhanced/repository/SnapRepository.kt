@@ -1,18 +1,20 @@
 package com.riskycase.jarvisEnhanced.repository
 
-import android.app.Application
+import android.content.Context
 import com.riskycase.jarvisEnhanced.database.AppDatabase
 import com.riskycase.jarvisEnhanced.database.dao.SnapDao
 import com.riskycase.jarvisEnhanced.models.Snap
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
 
-class SnapRepository(application: Application) {
+class SnapRepository @Inject constructor(@ApplicationContext private val context: Context) {
 
-    private val snapDao: SnapDao = AppDatabase.getDatabase(application).snapDao()
+    private val snapDao: SnapDao = AppDatabase.getDatabase(context).snapDao()
 
     val allSnapsLive = snapDao.getAllLive()
 
     fun allSnaps(): List<Snap> {
-        return  snapDao.getAll()
+        return snapDao.getAll()
     }
 
     fun add(snap: Snap) {

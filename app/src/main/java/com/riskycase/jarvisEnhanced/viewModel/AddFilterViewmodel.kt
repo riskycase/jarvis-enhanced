@@ -1,23 +1,24 @@
 package com.riskycase.jarvisEnhanced.viewModel
 
-import android.app.Application
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.riskycase.jarvisEnhanced.models.Filter
 import com.riskycase.jarvisEnhanced.repository.FilterRepository
 import com.riskycase.jarvisEnhanced.util.Constants
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class AddFilterViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class AddFilterViewModel @Inject constructor(private val filterRepository: FilterRepository) :
+    ViewModel() {
 
-    private val filterRepository = FilterRepository(application)
+    var currentFilterTitle = MutableStateFlow("")
 
-    var currentFilterTitle: String by mutableStateOf("")
-        private set
-
-    var currentFilterText: String by mutableStateOf("")
-        private set
+    var currentFilterText = MutableStateFlow("")
 
     private var currentFilterId: Int = 0
     private var currentFilterPackage: String = Constants.SNAPCHAT_PACKAGE_NAME
@@ -25,28 +26,31 @@ class AddFilterViewModel(application: Application) : AndroidViewModel(applicatio
     fun setId(id: Int) {
         currentFilterId = id
         if (id == 0) {
-            currentFilterTitle = ""
-            currentFilterText = ""
-        } else Thread {
+            currentFilterTitle.update { "" }
+            currentFilterText.update { "" }
+        } else viewModelScope.launch(Dispatchers.IO) {
             val filter = filterRepository.getFilter(id)
-            currentFilterTitle = filter.title
-            currentFilterText = filter.text
-        }.start()
+            currentFilterTitle.update { filter.title }
+            currentFilterText.update { filter.text }
+        }
     }
 
     fun setTitle(title: String) {
-        currentFilterTitle = title
+        currentFilterTitle.update { title }
     }
 
     fun setText(text: String) {
-        currentFilterText = text
+        currentFilterText.update { text }
     }
 
     fun save() {
         Thread {
             filterRepository.add(
                 Filter(
-                    currentFilterId, currentFilterTitle, currentFilterText, currentFilterPackage
+                    currentFilterId,
+                    currentFilterTitle.value,
+                    currentFilterText.value,
+                    currentFilterPackage
                 )
             )
         }.start()

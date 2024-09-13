@@ -18,23 +18,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.riskycase.jarvisEnhanced.models.Snap
+import com.riskycase.jarvisEnhanced.ui.components.SnapListItemComponent
 import com.riskycase.jarvisEnhanced.ui.components.TopBarComponent
-import com.riskycase.jarvisEnhanced.util.Converter
-import com.riskycase.jarvisEnhanced.viewModel.SnapViewModel
+import com.riskycase.jarvisEnhanced.viewModel.HomeViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    snapViewModel: SnapViewModel,
-    navController: NavController,
-    drawerState: DrawerState,
-    converter: Converter
+    homeViewModel: HomeViewModel, navController: NavController, drawerState: DrawerState
 ) {
-    val snaps = snapViewModel.getAllSnaps().observeAsState(emptyList())
-    Scaffold(topBar = { TopBarComponent(navController, drawerState, "Snaps", true) },
+    val snaps = homeViewModel.getAllSnaps().observeAsState(emptyList())
+    Scaffold(
+        topBar = { TopBarComponent(navController, drawerState, "Snaps", true) },
         floatingActionButton = {
             if (snaps.value.isNotEmpty()) ExtendedFloatingActionButton(onClick = {
-                snapViewModel.clear()
+                homeViewModel.clear()
             }) {
                 Icon(
                     imageVector = Icons.Filled.Clear, contentDescription = "Clear snaps"
@@ -48,7 +46,9 @@ fun HomeScreen(
                 .fillMaxWidth(1f)
         ) {
             items(items = snaps.value, itemContent = { snap: Snap ->
-                converter.SnapToSnapItemComponent(snap)
+                SnapListItemComponent(
+                    sender = snap.sender, time = homeViewModel.getRelativeTimestamp(snap)
+                )
             })
         }
     }

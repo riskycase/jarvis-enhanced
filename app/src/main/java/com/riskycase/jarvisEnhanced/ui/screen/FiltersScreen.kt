@@ -27,7 +27,8 @@ fun FiltersScreen(
     filterViewModel: FilterViewModel, navController: NavController, drawerState: DrawerState
 ) {
     val filters = filterViewModel.getAllFilters().observeAsState(emptyList())
-    Scaffold(topBar = { TopBarComponent(navController, drawerState, "Filters", true) },
+    Scaffold(
+        topBar = { TopBarComponent(navController, drawerState, "Filters", true) },
         floatingActionButton = {
             ExtendedFloatingActionButton(onClick = filterViewModel::reset,
                 icon = { Icon(Icons.Filled.Refresh, "Reset filters") },
