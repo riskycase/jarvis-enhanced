@@ -1,7 +1,9 @@
 package com.riskycase.jarvisEnhanced
 
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -53,6 +55,9 @@ class MainActivity : ComponentActivity() {
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onResume() {
+
+        enableEdgeToEdge()
+
         super.onResume()
 
         notificationMaker.setup()
