@@ -56,8 +56,8 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun restartService() {
-        // FIXME: This crashes the app with java.lang.NullPointerException: class name is null
-//        NotificationListener().goForeground(application.applicationContext)
+        val notificationListenerIntent = Intent(applicationContext, NotificationListener::class.java)
+        applicationContext.startService(notificationListenerIntent)
     }
 
 }

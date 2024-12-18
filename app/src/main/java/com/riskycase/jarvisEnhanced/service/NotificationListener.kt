@@ -17,7 +17,6 @@ import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
-import androidx.core.app.ServiceCompat
 import com.riskycase.jarvisEnhanced.R
 import com.riskycase.jarvisEnhanced.datastore.settingsDataStore
 import com.riskycase.jarvisEnhanced.models.Filter
@@ -115,9 +114,8 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
         return sender
     }
 
-    fun goForeground() {
-        ServiceCompat.startForeground(
-            this,
+    private fun goForeground() {
+        startForeground(
             Constants.MONITOR_FOREGROUND_NOTIFICATION_ID,
             makeNotification(),
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
