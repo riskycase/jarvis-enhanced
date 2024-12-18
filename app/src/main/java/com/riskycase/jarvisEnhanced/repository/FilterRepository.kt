@@ -11,7 +11,11 @@ class FilterRepository @Inject constructor(@ApplicationContext private val conte
 
     private val filterDao: FilterDao = AppDatabase.getDatabase(context).filterDao()
 
-    val allFilters = filterDao.getAllLive()
+    val allFiltersLive = filterDao.getAllLive()
+
+    fun getAllFilters(): List<Filter> {
+        return filterDao.getAll()
+    }
 
     fun reset() {
         filterDao.reset()

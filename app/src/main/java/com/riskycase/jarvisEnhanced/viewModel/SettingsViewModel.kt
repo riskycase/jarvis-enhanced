@@ -15,8 +15,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    @ApplicationContext private val applicationContext: Context,
-    private val notificationListener: NotificationListener
+    @ApplicationContext private val applicationContext: Context
 ) : ViewModel() {
 
     fun getNotificationListenerServiceEnabled(): Boolean {
@@ -51,12 +50,9 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
-    fun refreshSnaps() {
-        notificationListener.readPendingSnaps()
-    }
-
     fun restartService() {
-        val notificationListenerIntent = Intent(applicationContext, NotificationListener::class.java)
+        val notificationListenerIntent =
+            Intent(applicationContext, NotificationListener::class.java)
         applicationContext.startService(notificationListenerIntent)
     }
 

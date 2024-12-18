@@ -57,20 +57,11 @@ fun SettingsScreen(
             Divider()
             Column(modifier = Modifier
                 .clickable {
-                    settingsViewModel.refreshSnaps()
-                }
-                .padding(16.dp)
-                .fillMaxWidth(1f)) {
-                Text("Refresh snaps", fontSize = 20.sp)
-            }
-            Divider()
-            Column(modifier = Modifier
-                .clickable {
                     settingsViewModel.restartService()
                 }
                 .padding(16.dp)
                 .fillMaxWidth(1f)) {
-                Text("Restart listener service", fontSize = 20.sp)
+                Text("Refresh snaps and fix service", fontSize = 20.sp)
             }
         }
     }

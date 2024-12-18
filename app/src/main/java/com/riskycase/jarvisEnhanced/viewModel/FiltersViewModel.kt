@@ -12,7 +12,7 @@ class FilterViewModel @Inject constructor(private val filterRepository: FilterRe
     ViewModel() {
 
     fun getAllFilters(): LiveData<List<Filter>> {
-        return filterRepository.allFilters
+        return filterRepository.allFiltersLive
     }
 
     fun reset() {

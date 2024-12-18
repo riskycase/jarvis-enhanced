@@ -16,6 +16,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.riskycase.jarvisEnhanced.R
 import com.riskycase.jarvisEnhanced.datastore.settingsDataStore
@@ -87,7 +88,7 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
         )
     }
 
-    private fun getSender(sbn: StatusBarNotification): String? {
+    private fun getSender(sbn: StatusBarNotification, filters: List<Filter>): String? {
         var sender: String? = null
         val snapchatFilters =
             filters.filter { filter -> filter.packageName == Constants.SNAPCHAT_PACKAGE_NAME }
@@ -129,20 +130,23 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
 
     fun readPendingSnaps() {
 
-        filterRepository.allFilters.observeForever { filters -> this.filters = filters }
+        Thread {
+            val filters = filterRepository.getAllFilters()
+            activeNotifications.filter { it.packageName == Constants.SNAPCHAT_PACKAGE_NAME || it.packageName == "net.dinglisch.android.taskerm" }
+                .map {
+                    val sender = getSender(it, filters)
+                    if (sender.isNullOrBlank()) return@map null
+                    cancelNotification(it.key)
+                    return@map Snap(it.key.plus("|").plus(it.postTime), sender, it.postTime)
+                }.filterNotNull().forEach(snapRepository::add)
+            notificationMaker.makeNotification()
+        }.start()
 
-        activeNotifications.filter { it.packageName == Constants.SNAPCHAT_PACKAGE_NAME || it.packageName == "net.dinglisch.android.taskerm" }
-            .map {
-                val sender = getSender(it)
-                if (sender.isNullOrBlank()) return@map null
-                return@map Snap(it.key.plus("|").plus(it.postTime), sender, it.postTime)
-            }.filterNotNull().forEach(snapRepository::add)
-        notificationMaker.makeNotification()
     }
 
     override fun onBind(intent: Intent?): IBinder? {
         notificationMaker.makeNotification()
-        filterRepository.allFilters.observeForever { filters -> this.filters = filters }
+        filterRepository.allFiltersLive.observeForever { filters -> this.filters = filters }
         return super.onBind(intent)
     }
 
@@ -184,7 +188,7 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (sbn.packageName == Constants.SNAPCHAT_PACKAGE_NAME || sbn.packageName == "net.dinglisch.android.taskerm") {
-            val sender = getSender(sbn)
+            val sender = getSender(sbn, filters)
             if (!sender.isNullOrBlank()) {
                 val snap = Snap(sbn.key.plus("|").plus(sbn.postTime), sender, sbn.postTime)
                 Thread {
@@ -194,5 +198,10 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
                 }.start()
             }
         }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        readPendingSnaps()
+        return super.onStartCommand(intent, flags, startId)
     }
 }
