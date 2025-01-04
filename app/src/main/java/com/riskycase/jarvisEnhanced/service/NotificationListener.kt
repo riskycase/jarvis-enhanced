@@ -10,14 +10,19 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.database.sqlite.SQLiteConstraintException
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.riskycase.jarvisEnhanced.R
 import com.riskycase.jarvisEnhanced.datastore.settingsDataStore
 import com.riskycase.jarvisEnhanced.models.Filter
@@ -25,12 +30,14 @@ import com.riskycase.jarvisEnhanced.models.Snap
 import com.riskycase.jarvisEnhanced.repository.FilterRepository
 import com.riskycase.jarvisEnhanced.repository.SnapRepository
 import com.riskycase.jarvisEnhanced.util.Constants
+import com.riskycase.jarvisEnhanced.util.NasaApodFetchWorker
 import com.riskycase.jarvisEnhanced.util.NotificationMaker
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -138,7 +145,12 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
                     if (sender.isNullOrBlank()) return@map null
                     cancelNotification(it.key)
                     return@map Snap(it.key.plus("|").plus(it.postTime), sender, it.postTime)
-                }.filterNotNull().forEach(snapRepository::add)
+                }.filterNotNull().forEach {
+                    try {
+                        snapRepository.add(it)
+                    } catch (_: SQLiteConstraintException) {
+                    }
+                }
             notificationMaker.makeNotification()
         }.start()
 
