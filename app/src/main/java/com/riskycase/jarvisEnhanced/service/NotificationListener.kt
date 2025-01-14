@@ -18,11 +18,6 @@ import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
 import com.riskycase.jarvisEnhanced.R
 import com.riskycase.jarvisEnhanced.datastore.settingsDataStore
 import com.riskycase.jarvisEnhanced.models.Filter
@@ -30,14 +25,12 @@ import com.riskycase.jarvisEnhanced.models.Snap
 import com.riskycase.jarvisEnhanced.repository.FilterRepository
 import com.riskycase.jarvisEnhanced.repository.SnapRepository
 import com.riskycase.jarvisEnhanced.util.Constants
-import com.riskycase.jarvisEnhanced.util.NasaApodFetchWorker
 import com.riskycase.jarvisEnhanced.util.NotificationMaker
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -204,7 +197,11 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
             if (!sender.isNullOrBlank()) {
                 val snap = Snap(sbn.key.plus("|").plus(sbn.postTime), sender, sbn.postTime)
                 Thread {
-                    snapRepository.add(snap)
+                    try {
+                        snapRepository.add(snap)
+                    } catch (e: SQLiteConstraintException) {
+                        // Nothing to do here, Snapchat is being a bitch
+                    }
                     super.cancelNotification(sbn.key)
                     notificationMaker.makeNotification()
                 }.start()

@@ -1,4 +1,3 @@
-import com.google.protobuf.gradle.*
 import org.jetbrains.kotlin.config.JvmTarget
 
 val protobufVersion = "3.18.0"
@@ -34,8 +33,7 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             )
         }
     }
@@ -96,6 +94,8 @@ dependencies {
     implementation("androidx.hilt:hilt-navigation-fragment:1.2.0")
     kapt("com.google.dagger:hilt-android-compiler:2.51.1")
 
+    implementation("androidx.palette:palette-ktx:1.0.0")
+
     implementation("com.google.accompanist:accompanist-systemuicontroller:0.27.0")
 
     val nav_version = "2.7.3"
@@ -117,7 +117,7 @@ protobuf {
     }
     generateProtoTasks {
         all().forEach { task ->
-            task.plugins{
+            task.plugins {
                 create("java") {
                     option("lite")
                 }
