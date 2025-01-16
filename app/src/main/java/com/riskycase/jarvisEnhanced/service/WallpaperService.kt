@@ -1,5 +1,6 @@
 package com.riskycase.jarvisEnhanced.service
 
+import android.app.WallpaperManager
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -14,9 +15,11 @@ import android.graphics.SweepGradient
 import android.icu.text.SimpleDateFormat
 import android.icu.util.Calendar
 import android.os.BatteryManager
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.AlarmClock
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
 import androidx.core.graphics.ColorUtils
@@ -26,6 +29,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import java.util.Locale
 import javax.inject.Inject
 import kotlin.math.max
+import kotlin.math.pow
 
 @AndroidEntryPoint
 class WallpaperService : WallpaperService() {
@@ -101,6 +105,22 @@ class WallpaperService : WallpaperService() {
             this.xOffset = xOffset - 0.5f
         }
 
+        override fun onCommand(
+            action: String?, x: Int, y: Int, z: Int, extras: Bundle?, resultRequested: Boolean
+        ): Bundle {
+            if (WallpaperManager.COMMAND_TAP.equals(action)) {
+                if (((clockCenter.x - x.toFloat()).pow(2) + (clockCenter.y - y.toFloat()).pow(2)) < (radius.pow(
+                        2
+                    ))
+                ) {
+                    val openAlarmIntent = Intent(AlarmClock.ACTION_SHOW_ALARMS)
+                    openAlarmIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    applicationContext.startActivity(openAlarmIntent)
+                }
+            }
+            return Bundle()
+        }
+
         private fun drawImageCover(
             canvas: Canvas, bitmap: Bitmap, canvasWidth: Int, canvasHeight: Int
         ) {
@@ -164,7 +184,9 @@ class WallpaperService : WallpaperService() {
             textPaint.typeface = resources.getFont(R.font.dseg7modernmini)
             textPaint.textSize = radius / 6f
             var textBounds = Rect()
-            val currentTimeText = SimpleDateFormat(if(now.get(Calendar.SECOND) % 2 == 0) "HH:mm:ss" else "HH mm ss", Locale.UK).format(now)
+            val currentTimeText = SimpleDateFormat(
+                if (now.get(Calendar.SECOND) % 2 == 0) "HH:mm:ss" else "HH mm ss", Locale.UK
+            ).format(now)
             textPaint.getTextBounds("88:88:88", 0, 8, textBounds)
             var darkColorHSL = floatArrayOf(0f, 0f, 0f)
             ColorUtils.colorToHSL(palette.getDarkVibrantColor(Color.DKGRAY), darkColorHSL)
