@@ -1,5 +1,6 @@
 package com.riskycase.jarvisEnhanced.service
 
+import android.app.KeyguardManager
 import android.app.WallpaperManager
 import android.content.Intent
 import android.graphics.Bitmap
@@ -43,6 +44,9 @@ class WallpaperService : WallpaperService() {
 
     @Inject
     lateinit var batteryManager: BatteryManager
+
+    @Inject
+    lateinit var keyguardManager: KeyguardManager
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         applicationContext.openFileInput("wallpaper").use {
@@ -91,8 +95,6 @@ class WallpaperService : WallpaperService() {
         ) {
             this.width = width
             this.height = height
-            clockCenter = PointF(width / 2f, width * 3f / 4f)
-            radius = width / 3f
             super.onSurfaceChanged(holder, format, width, height)
         }
 
@@ -113,7 +115,7 @@ class WallpaperService : WallpaperService() {
         override fun onCommand(
             action: String?, x: Int, y: Int, z: Int, extras: Bundle?, resultRequested: Boolean
         ): Bundle {
-            if (WallpaperManager.COMMAND_TAP.equals(action)) {
+            if (WallpaperManager.COMMAND_TAP.equals(action) && !keyguardManager.isKeyguardLocked) {
                 if (((clockCenter.x - x.toFloat()).pow(2) + (clockCenter.y - y.toFloat()).pow(2)) < (radius.pow(
                         2
                     ))
@@ -269,50 +271,52 @@ class WallpaperService : WallpaperService() {
             val contrastColor =
                 if (ColorUtils.calculateLuminance(palette.getVibrantColor(Color.WHITE)) > 0.5f) Color.BLACK else Color.WHITE
 
-            val textPaint = Paint()
-            textPaint.typeface = resources.getFont(R.font.dseg7modernmini)
-            textPaint.textSize = radius / 6f
-            var textBounds = Rect()
-            val currentTimeText = SimpleDateFormat(
-                if (now.get(Calendar.SECOND) % 2 == 0) "HH:mm:ss" else "HH mm ss", Locale.UK
-            ).format(now)
-            textPaint.getTextBounds("88:88:88", 0, 8, textBounds)
-            var darkColorHSL = floatArrayOf(0f, 0f, 0f)
-            ColorUtils.colorToHSL(palette.getDarkVibrantColor(Color.DKGRAY), darkColorHSL)
-            textPaint.color =
-                ColorUtils.HSLToColor(floatArrayOf(darkColorHSL[0], darkColorHSL[1], 0.47f))
-            canvas.drawRect(
-                RectF(
-                    center.x - (textBounds.width().toFloat() / 2f) - 20f,
-                    center.y - (radius / 2f) - (textBounds.height().toFloat()) + 10f,
-                    center.x + (textBounds.width().toFloat() / 2f) + 17.5f,
-                    center.y - (radius / 2f) + 47.5f
-                ), textPaint
-            )
-            textPaint.color =
-                ColorUtils.HSLToColor(floatArrayOf(darkColorHSL[0], darkColorHSL[1], 0.77f))
-            canvas.drawRect(
-                RectF(
-                    center.x - (textBounds.width().toFloat() / 2f) - 10f,
-                    center.y - (radius / 2f) - (textBounds.height().toFloat()) + 20f,
-                    center.x + (textBounds.width().toFloat() / 2f) + 10f,
-                    center.y - (radius / 2f) + 40f
-                ), textPaint
-            )
-            textPaint.color = Color.argb(96, 128, 128, 128)
-            canvas.drawText(
-                "88:88:88",
-                center.x - (textBounds.width().toFloat() / 2f),
-                center.y - (radius / 2f) + 30f,
-                textPaint
-            )
-            textPaint.color = contrastColor
-            canvas.drawText(
-                currentTimeText,
-                center.x - (textBounds.width().toFloat() / 2f),
-                center.y - (radius / 2f) + 30f,
-                textPaint
-            )
+            if(!keyguardManager.isKeyguardLocked) {
+                val textPaint = Paint()
+                textPaint.typeface = resources.getFont(R.font.dseg7modernmini)
+                textPaint.textSize = radius / 6f
+                var textBounds = Rect()
+                val currentTimeText = SimpleDateFormat(
+                    if (now.get(Calendar.SECOND) % 2 == 0) "HH:mm:ss" else "HH mm ss", Locale.UK
+                ).format(now)
+                textPaint.getTextBounds("88:88:88", 0, 8, textBounds)
+                var darkColorHSL = floatArrayOf(0f, 0f, 0f)
+                ColorUtils.colorToHSL(palette.getDarkVibrantColor(Color.DKGRAY), darkColorHSL)
+                textPaint.color =
+                    ColorUtils.HSLToColor(floatArrayOf(darkColorHSL[0], darkColorHSL[1], 0.47f))
+                canvas.drawRect(
+                    RectF(
+                        center.x - (textBounds.width().toFloat() / 2f) - 20f,
+                        center.y - (radius / 2f) - (textBounds.height().toFloat()) + 10f,
+                        center.x + (textBounds.width().toFloat() / 2f) + 17.5f,
+                        center.y - (radius / 2f) + 47.5f
+                    ), textPaint
+                )
+                textPaint.color =
+                    ColorUtils.HSLToColor(floatArrayOf(darkColorHSL[0], darkColorHSL[1], 0.77f))
+                canvas.drawRect(
+                    RectF(
+                        center.x - (textBounds.width().toFloat() / 2f) - 10f,
+                        center.y - (radius / 2f) - (textBounds.height().toFloat()) + 20f,
+                        center.x + (textBounds.width().toFloat() / 2f) + 10f,
+                        center.y - (radius / 2f) + 40f
+                    ), textPaint
+                )
+                textPaint.color = Color.argb(96, 128, 128, 128)
+                canvas.drawText(
+                    "88:88:88",
+                    center.x - (textBounds.width().toFloat() / 2f),
+                    center.y - (radius / 2f) + 30f,
+                    textPaint
+                )
+                textPaint.color = contrastColor
+                canvas.drawText(
+                    currentTimeText,
+                    center.x - (textBounds.width().toFloat() / 2f),
+                    center.y - (radius / 2f) + 30f,
+                    textPaint
+                )
+            }
 
             val clockPaint = Paint()
             clockPaint.color = contrastColor
@@ -381,6 +385,13 @@ class WallpaperService : WallpaperService() {
             if (visible) {
                 canvas = holder.lockHardwareCanvas()
                 if (canvas != null) {
+                    if (keyguardManager.isKeyguardLocked) {
+                        clockCenter = PointF(width * 5f/6f - 30f, width / 3f)
+                        radius = width/6f
+                    } else {
+                        clockCenter = PointF(width / 2f, width * 3f / 4f)
+                        radius = width / 3f
+                    }
                     if (backgroundImage != null) {
                         canvas.save()
                         canvas.translate(if (!isPreview) width * xOffset else 0f, 0f)
