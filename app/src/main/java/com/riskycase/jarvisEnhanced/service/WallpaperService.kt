@@ -8,6 +8,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.Rect
 import android.graphics.RectF
@@ -28,8 +29,12 @@ import com.riskycase.jarvisEnhanced.R
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.Locale
 import javax.inject.Inject
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 @AndroidEntryPoint
 class WallpaperService : WallpaperService() {
@@ -121,6 +126,90 @@ class WallpaperService : WallpaperService() {
             return Bundle()
         }
 
+        private fun drawHand(
+            canvas: Canvas,
+            center: PointF,
+            width: Float,
+            height: Float,
+            rotation: Float,
+            handPaint: Paint,
+            radius: Float,
+            shadowPaint: Paint
+        ) {
+            val sinValue = sin(rotation * PI / 180f).toFloat()
+            val cosValue = cos(rotation * PI / 180f).toFloat()
+
+            val start = PointF(
+                width.times(0.5f) * -cosValue, width.times(0.5f) * -sinValue
+            ) // width/2, rotation - 180
+            val heightOutwards = PointF(
+                height * sinValue, height * -cosValue
+            ) // height, rotation - 90
+            val widthCW = PointF(
+                width * cosValue, width * sinValue
+            ) // width, rotation
+
+
+            val handPath = Path()
+            handPath.moveTo(center.x, center.y)
+            handPath.rMoveTo(start.x, start.y)
+            handPath.rLineTo(heightOutwards.x, heightOutwards.y)
+            handPath.rLineTo(widthCW.x, widthCW.y)
+            handPath.rLineTo(-heightOutwards.x, -heightOutwards.y)
+            handPath.close()
+            canvas.drawPath(handPath, handPaint)
+
+            val shadowPath = Path()
+            shadowPath.moveTo(center.x, center.y)
+            shadowPath.rMoveTo(start.x, start.y)
+            if (rotation < 45f || rotation > 315f) {
+                shadowPath.rLineTo(widthCW.x, widthCW.y)
+                shadowPath.rLineTo(heightOutwards.x, heightOutwards.y)
+                shadowPath.rLineTo(radius.times(2f), radius.times(2f))
+                shadowPath.rLineTo(-heightOutwards.x, -heightOutwards.y)
+                shadowPath.rLineTo(-widthCW.x, -widthCW.y)
+            } else if (rotation < 135f) {
+                shadowPath.rMoveTo(widthCW.x, widthCW.y)
+                shadowPath.rLineTo(heightOutwards.x, heightOutwards.y)
+                shadowPath.rLineTo(-widthCW.x, -widthCW.y)
+                shadowPath.rLineTo(radius.times(2f), radius.times(2f))
+                shadowPath.rLineTo(widthCW.x, widthCW.y)
+                shadowPath.rLineTo(-heightOutwards.x, -heightOutwards.y)
+            } else if (rotation < 215f) {
+                shadowPath.rMoveTo(widthCW.x, widthCW.y)
+                shadowPath.rMoveTo(heightOutwards.x, heightOutwards.y)
+                shadowPath.rLineTo(-widthCW.x, -widthCW.y)
+                shadowPath.rLineTo(-heightOutwards.x, -heightOutwards.y)
+                shadowPath.rLineTo(radius.times(2f), radius.times(2f))
+                shadowPath.rLineTo(heightOutwards.x, heightOutwards.y)
+                shadowPath.rLineTo(widthCW.x, widthCW.y)
+            } else {
+                shadowPath.rMoveTo(heightOutwards.x, heightOutwards.y)
+                shadowPath.rLineTo(-heightOutwards.x, -heightOutwards.y)
+                shadowPath.rLineTo(widthCW.x, widthCW.y)
+                shadowPath.rLineTo(radius.times(2f), radius.times(2f))
+                shadowPath.rLineTo(-widthCW.x, -widthCW.y)
+                shadowPath.rLineTo(heightOutwards.x, heightOutwards.y)
+            }
+            shadowPath.close()
+
+            val centerPath = Path()
+            centerPath.moveTo(center.x, center.y)
+            centerPath.rMoveTo(35f / sqrt(2f), -35f/ sqrt(2f))
+            centerPath.rLineTo(radius * 2f, radius * 2f)
+            centerPath.rLineTo(-35f * sqrt(2f), 35f * sqrt(2f))
+            centerPath.rLineTo(-radius * 2f, -radius * 2f)
+            centerPath.close()
+            shadowPath.op(centerPath, Path.Op.UNION)
+
+            val clockFacePath = Path()
+            clockFacePath.addCircle(center.x, center.y, radius, Path.Direction.CW)
+            shadowPath.op(clockFacePath, Path.Op.INTERSECT)
+
+            canvas.drawPath(shadowPath, shadowPaint)
+
+        }
+
         private fun drawImageCover(
             canvas: Canvas, bitmap: Bitmap, canvasWidth: Int, canvasHeight: Int
         ) {
@@ -210,7 +299,7 @@ class WallpaperService : WallpaperService() {
                     center.y - (radius / 2f) + 40f
                 ), textPaint
             )
-            textPaint.color = Color.argb(128, 128, 128, 128)
+            textPaint.color = Color.argb(96, 128, 128, 128)
             canvas.drawText(
                 "88:88:88",
                 center.x - (textBounds.width().toFloat() / 2f),
@@ -229,49 +318,53 @@ class WallpaperService : WallpaperService() {
             clockPaint.color = contrastColor
             clockPaint.style = Paint.Style.FILL
 
+            val shadowPaint = Paint()
+            shadowPaint.color = Color.argb(64, 0, 0, 0)
+            shadowPaint.style = Paint.Style.FILL
+
             // Hours hand
-            canvas.save()
-            canvas.rotate(
+            drawHand(
+                canvas,
+                center,
+                15f,
+                radius.times(0.65f),
                 ((now.get(Calendar.HOUR).toFloat() / 12f) + (now.get(Calendar.MINUTE)
                     .toFloat() / 720f) + (now.get(Calendar.SECOND).toFloat() / 43200f) + now.get(
                     Calendar.MILLISECOND
-                ).toFloat() / 43200000f) * 360f, center.x, center.y
+                ).toFloat() / 43200000f) * 360f,
+                clockPaint,
+                radius.minus(7.5f),
+                shadowPaint
             )
-            canvas.drawRect(
-                RectF(
-                    center.x - 7.5f, center.y - (radius * 0.65f), center.x + 7.5f, center.y
-                ), clockPaint
-            )
-            canvas.restore()
 
             // Minutes hand
-            canvas.save()
-            canvas.rotate(
+            drawHand(
+                canvas,
+                center,
+                10f,
+                radius.minus(7.5f),
                 ((now.get(Calendar.MINUTE).toFloat() / 60f) + (now.get(Calendar.SECOND)
                     .toFloat() / 3600f) + now.get(
                     Calendar.MILLISECOND
-                ).toFloat() / 3600000f) * 360f, center.x, center.y
+                ).toFloat() / 3600000f) * 360f,
+                clockPaint,
+                radius.minus(7.5f),
+                shadowPaint
             )
-            canvas.drawRect(
-                RectF(
-                    center.x - 5f, center.y - (radius * 0.95f), center.x + 5f, center.y
-                ), clockPaint
-            )
-            canvas.restore()
 
             // Seconds hand
-            canvas.save()
-            canvas.rotate(
+            drawHand(
+                canvas,
+                center,
+                4f,
+                radius.minus(7.5f),
                 ((now.get(Calendar.SECOND).toFloat() / 60f) + now.get(
                     Calendar.MILLISECOND
-                ).toFloat() / 60000f) * 360f, center.x, center.y
+                ).toFloat() / 60000f) * 360f,
+                clockPaint,
+                radius.minus(7.5f),
+                shadowPaint
             )
-            canvas.drawRect(
-                RectF(
-                    center.x - 2f, center.y - (radius * 0.95f), center.x + 2f, center.y
-                ), clockPaint
-            )
-            canvas.restore()
 
             // Center piece
             bodyPaint.style = Paint.Style.FILL
