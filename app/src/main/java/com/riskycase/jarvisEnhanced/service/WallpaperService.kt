@@ -2,6 +2,7 @@ package com.riskycase.jarvisEnhanced.service
 
 import android.app.KeyguardManager
 import android.app.WallpaperManager
+import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -16,6 +17,8 @@ import android.graphics.RectF
 import android.graphics.SweepGradient
 import android.icu.text.SimpleDateFormat
 import android.icu.util.Calendar
+import android.media.MediaMetadata
+import android.media.session.MediaSessionManager
 import android.os.BatteryManager
 import android.os.Bundle
 import android.os.Handler
@@ -25,6 +28,7 @@ import android.provider.AlarmClock
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory
 import androidx.palette.graphics.Palette
 import com.riskycase.jarvisEnhanced.R
 import dagger.hilt.android.AndroidEntryPoint
@@ -48,6 +52,9 @@ class WallpaperService : WallpaperService() {
     @Inject
     lateinit var keyguardManager: KeyguardManager
 
+    @Inject
+    lateinit var mediaSessionManager: MediaSessionManager
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         applicationContext.openFileInput("wallpaper").use {
             backgroundImage = BitmapFactory.decodeStream(it)
@@ -69,6 +76,7 @@ class WallpaperService : WallpaperService() {
         private var visible: Boolean = true
         private var xOffset: Float = 0f
         private var clockCenter: PointF = PointF(0f, 0f)
+        private var mediaCenter: PointF = PointF(0f, 0f)
         private var radius: Float = 0f
 
         init {
@@ -123,6 +131,25 @@ class WallpaperService : WallpaperService() {
                     val openAlarmIntent = Intent(AlarmClock.ACTION_SHOW_ALARMS)
                     openAlarmIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     applicationContext.startActivity(openAlarmIntent)
+                }
+                if (mediaSessionManager.getActiveSessions(
+                        ComponentName(
+                            applicationContext, NotificationListener::class.java
+                        )
+                    ).size > 0
+                ) {
+                    if (((mediaCenter.x - x.toFloat()).pow(2) + (mediaCenter.y - y.toFloat()).pow(2)) < (radius.div(
+                            2f
+                        ).pow(
+                            2
+                        ))
+                    ) {
+                        mediaSessionManager.getActiveSessions(
+                            ComponentName(
+                                applicationContext, NotificationListener::class.java
+                            )
+                        )[0].sessionActivity?.send()
+                    }
                 }
             }
             return Bundle()
@@ -197,9 +224,9 @@ class WallpaperService : WallpaperService() {
 
             val centerPath = Path()
             centerPath.moveTo(center.x, center.y)
-            centerPath.rMoveTo(35f / sqrt(2f), -35f/ sqrt(2f))
+            centerPath.rMoveTo((25f.plus(7.5f / 2)) / sqrt(2f), -(25f.plus(7.5f / 2)) / sqrt(2f))
             centerPath.rLineTo(radius * 2f, radius * 2f)
-            centerPath.rLineTo(-35f * sqrt(2f), 35f * sqrt(2f))
+            centerPath.rLineTo(-(25f.plus(7.5f / 2)) * sqrt(2f), (25f.plus(7.5f / 2)) * sqrt(2f))
             centerPath.rLineTo(-radius * 2f, -radius * 2f)
             centerPath.close()
             shadowPath.op(centerPath, Path.Op.UNION)
@@ -271,10 +298,10 @@ class WallpaperService : WallpaperService() {
             val contrastColor =
                 if (ColorUtils.calculateLuminance(palette.getVibrantColor(Color.WHITE)) > 0.5f) Color.BLACK else Color.WHITE
 
-            if(!keyguardManager.isKeyguardLocked) {
+            if (!keyguardManager.isKeyguardLocked) {
                 val textPaint = Paint()
                 textPaint.typeface = resources.getFont(R.font.dseg7modernmini)
-                textPaint.textSize = radius / 6f
+                textPaint.textSize = radius / 5f
                 var textBounds = Rect()
                 val currentTimeText = SimpleDateFormat(
                     if (now.get(Calendar.SECOND) % 2 == 0) "HH:mm:ss" else "HH mm ss", Locale.UK
@@ -372,10 +399,47 @@ class WallpaperService : WallpaperService() {
 
             // Center piece
             bodyPaint.style = Paint.Style.FILL
-            canvas.drawCircle(center.x, center.y, 30f, bodyPaint)
+            canvas.drawCircle(center.x, center.y, 25f, bodyPaint)
             clockPaint.style = Paint.Style.STROKE
-            clockPaint.strokeWidth = 10f
-            canvas.drawCircle(center.x, center.y, 30f, clockPaint)
+            clockPaint.strokeWidth = 7.5f
+            canvas.drawCircle(center.x, center.y, 25f, clockPaint)
+        }
+
+        fun drawMediaPlayer(
+            canvas: Canvas,
+            center: PointF,
+            radius: Float,
+            palette: Palette,
+        ) {
+            val mediaSessions = mediaSessionManager.getActiveSessions(
+                ComponentName(
+                    applicationContext, NotificationListener::class.java
+                )
+            )
+            if (mediaSessions.size > 0) {
+                val activeSession = mediaSessions[0]
+                canvas.save()
+                canvas.rotate(
+                    (activeSession.playbackState!!.position.toFloat()).div(
+                        activeSession.metadata!!.getLong(
+                            MediaMetadata.METADATA_KEY_DURATION
+                        )
+                    ).times(360f), center.x, center.y
+                )
+                RoundedBitmapDrawableFactory.create(
+                    resources,
+                    activeSession.metadata!!.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                ).apply {
+                    setBounds(
+                        (center.x - radius).toInt(),
+                        (center.y - radius).toInt(),
+                        (center.x + radius).toInt(),
+                        (center.y + radius).toInt()
+                    )
+                    cornerRadius = radius
+                }.draw(canvas)
+                canvas.restore()
+            }
         }
 
         private fun draw() {
@@ -386,20 +450,20 @@ class WallpaperService : WallpaperService() {
                 canvas = holder.lockHardwareCanvas()
                 if (canvas != null) {
                     if (keyguardManager.isKeyguardLocked) {
-                        clockCenter = PointF(width * 5f/6f - 30f, width / 3f)
-                        radius = width/6f
+                        clockCenter = PointF(width * 5f / 6f - 30f, width / 3f)
+                        radius = width / 6f
                     } else {
-                        clockCenter = PointF(width / 2f, width * 3f / 4f)
-                        radius = width / 3f
+                        clockCenter = PointF(width / 2f, width * 2f / 3f)
+                        radius = width / 4f
+                        mediaCenter = PointF(width / 2f, height / 2f + width / 12f)
                     }
+                    var palette = Palette.from(listOf(Palette.Swatch(Color.WHITE, 100)))
                     if (backgroundImage != null) {
                         canvas.save()
                         canvas.translate(if (!isPreview) width * xOffset else 0f, 0f)
                         drawImageCover(canvas, backgroundImage!!, width, height)
                         canvas.restore()
-                        drawClock(
-                            canvas, clockCenter, radius, Palette.from(backgroundImage!!).generate()
-                        )
+                        palette = Palette.from(backgroundImage!!).generate()
                     } else {
                         val blackPaint = Paint()
                         blackPaint.color = Color.BLACK
@@ -407,12 +471,10 @@ class WallpaperService : WallpaperService() {
                         canvas.drawRect(
                             RectF(0f, 0f, width.toFloat(), height.toFloat()), blackPaint
                         )
-                        drawClock(
-                            canvas,
-                            clockCenter,
-                            radius,
-                            Palette.from(listOf(Palette.Swatch(Color.WHITE, 100)))
-                        )
+                    }
+                    drawClock(canvas, clockCenter, radius, palette)
+                    if (!keyguardManager.isKeyguardLocked) {
+                        drawMediaPlayer(canvas, mediaCenter, radius * 2f / 3f, palette)
                     }
                     holder.unlockCanvasAndPost(canvas)
                 }

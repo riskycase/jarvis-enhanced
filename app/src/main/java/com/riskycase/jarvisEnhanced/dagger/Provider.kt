@@ -2,6 +2,7 @@ package com.riskycase.jarvisEnhanced.dagger
 
 import android.app.KeyguardManager
 import android.content.Context
+import android.media.session.MediaSessionManager
 import android.os.BatteryManager
 import dagger.Module
 import dagger.Provides
@@ -21,6 +22,11 @@ class Provider {
     @Provides
     fun providesKeyguardManager(@ApplicationContext context: Context): KeyguardManager {
         return (context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager)
+    }
+
+    @Provides
+    fun providesMediaSessionManager(@ApplicationContext context: Context): MediaSessionManager {
+        return (context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager)
     }
 
 }
