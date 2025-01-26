@@ -18,6 +18,7 @@ import android.graphics.SweepGradient
 import android.icu.text.SimpleDateFormat
 import android.icu.util.Calendar
 import android.media.MediaMetadata
+import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.os.BatteryManager
 import android.os.Bundle
@@ -26,10 +27,11 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.AlarmClock
 import android.service.wallpaper.WallpaperService
+import android.util.Log
 import android.view.SurfaceHolder
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.drawable.RoundedBitmapDrawable
 import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory
-import androidx.core.graphics.drawable.toBitmap
 import androidx.palette.graphics.Palette
 import com.riskycase.jarvisEnhanced.R
 import dagger.hilt.android.AndroidEntryPoint
@@ -39,6 +41,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -46,6 +49,8 @@ import kotlin.math.sqrt
 class WallpaperService : WallpaperService() {
 
     private var backgroundImage: Bitmap? = null
+    private var albumArtBitmap: RoundedBitmapDrawable? = null
+    private var previousMediaMetadata: MediaMetadata? = null
 
     @Inject
     lateinit var batteryManager: BatteryManager
@@ -80,9 +85,36 @@ class WallpaperService : WallpaperService() {
         private var mediaCenter: PointF = PointF(0f, 0f)
         private var controlsCenter: PointF = PointF(0f, 0f)
         private var radius: Float = 0f
+        private var activeController: MediaController? = null
+
+        private var playDrawable = getDrawable(R.drawable.play)
+        private var pauseDrawable = getDrawable(R.drawable.pause)
+        private var previousDrawable = getDrawable(R.drawable.previous)
+        private var nextDrawable = getDrawable(R.drawable.next)
 
         init {
             handler.post(drawRunner)
+            mediaSessionManager.addOnActiveSessionsChangedListener({ controllers ->
+                activeController = if (controllers!!.size > 0) {
+                    controllers[0]
+                } else {
+                    null
+                }
+            }, ComponentName(applicationContext, NotificationListener::class.java))
+            if (mediaSessionManager.getActiveSessions(
+                    ComponentName(
+                        applicationContext,
+                        NotificationListener::class.java
+                    )
+                ).size > 0
+            ) {
+                activeController = mediaSessionManager.getActiveSessions(
+                    ComponentName(
+                        applicationContext,
+                        NotificationListener::class.java
+                    )
+                )[0]
+            }
         }
 
         override fun onVisibilityChanged(visible: Boolean) {
@@ -134,49 +166,58 @@ class WallpaperService : WallpaperService() {
                     openAlarmIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     applicationContext.startActivity(openAlarmIntent)
                 }
-                if (mediaSessionManager.getActiveSessions(
-                        ComponentName(
-                            applicationContext, NotificationListener::class.java
-                        )
-                    ).size > 0
-                ) {
+                if (activeController != null) {
                     val mediaControlsRect = RectF(
                         controlsCenter.x - radius.div(2f).times(1.25f),
                         controlsCenter.y - radius.div(4f).times(0.85f),
                         controlsCenter.x + radius.div(2f).times(1.25f),
                         controlsCenter.y + radius.div(4f).times(0.85f),
                     )
-                    val activeSession = mediaSessionManager.getActiveSessions(
-                        ComponentName(
-                            applicationContext, NotificationListener::class.java
-                        )
-                    )[0]
                     if (((mediaCenter.x - x.toFloat()).pow(2) + (mediaCenter.y - y.toFloat()).pow(2)) < (radius.div(
                             2f
                         ).pow(
                             2
                         ))
                     ) {
-                        activeSession.sessionActivity?.send()
+                        activeController!!.sessionActivity?.send()
                     } else if (((controlsCenter.x - x.toFloat()).pow(2) + (controlsCenter.y - y.toFloat()).pow(
                             2
                         )) < (radius.div(4f).pow(2))
                     ) {
-                        if (activeSession.playbackState!!.isActive) {
-                            activeSession.transportControls.pause()
+                        if (activeController!!.playbackState!!.isActive) {
+                            activeController!!.transportControls.pause()
                         } else {
-                            activeSession.transportControls.play()
+                            activeController!!.transportControls.play()
                         }
                     } else if (mediaControlsRect.contains(x.toFloat(), y.toFloat())) {
                         if (x < width.div(2f)) {
-                            activeSession.transportControls.skipToPrevious()
+                            activeController!!.transportControls.skipToPrevious()
                         } else {
-                            activeSession.transportControls.skipToNext()
+                            activeController!!.transportControls.skipToNext()
                         }
                     }
                 }
             }
             return Bundle()
+        }
+
+        private fun setAlbumArt() {
+            val currentMediaMetadata = activeController?.metadata
+            if (currentMediaMetadata != previousMediaMetadata) {
+                albumArtBitmap =
+                    RoundedBitmapDrawableFactory.create(
+                        resources, activeController!!.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                    ).apply {
+                        setBounds(
+                            (mediaCenter.x - radius.div(2f)).toInt(),
+                            (mediaCenter.y - radius.div(2f)).toInt(),
+                            (mediaCenter.x + radius.div(2f)).toInt(),
+                            (mediaCenter.y + radius.div(2f)).toInt(),
+                        )
+                        cornerRadius = radius.div(2f)
+                    }
+                previousMediaMetadata = currentMediaMetadata
+            }
         }
 
         private fun drawHand(
@@ -435,33 +476,16 @@ class WallpaperService : WallpaperService() {
             radius: Float,
             palette: Palette,
         ) {
-            val mediaSessions = mediaSessionManager.getActiveSessions(
-                ComponentName(
-                    applicationContext, NotificationListener::class.java
-                )
-            )
-            if (mediaSessions.size > 0) {
-                val activeSession = mediaSessions[0]
+            if (activeController != null) {
                 canvas.save()
                 canvas.rotate(
-                    (activeSession.playbackState!!.position.toFloat()).div(
-                        activeSession.metadata!!.getLong(
+                    (activeController!!.playbackState!!.position.toFloat()).div(
+                        activeController!!.metadata!!.getLong(
                             MediaMetadata.METADATA_KEY_DURATION
                         )
                     ).times(360f), center.x, center.y
                 )
-                RoundedBitmapDrawableFactory.create(
-                    resources,
-                    activeSession.metadata!!.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-                ).apply {
-                    setBounds(
-                        (center.x - radius).toInt(),
-                        (center.y - radius).toInt(),
-                        (center.x + radius).toInt(),
-                        (center.y + radius).toInt()
-                    )
-                    cornerRadius = radius
-                }.draw(canvas)
+                albumArtBitmap?.draw(canvas)
                 canvas.restore()
 
                 val controlsPaint = Paint()
@@ -485,16 +509,15 @@ class WallpaperService : WallpaperService() {
                 val contrastColor =
                     if (ColorUtils.calculateLuminance(palette.getVibrantColor(Color.WHITE)) > 0.5f) Color.BLACK else Color.WHITE
                 val centerIcon =
-                    getDrawable(if (activeSession.playbackState!!.isActive) R.drawable.pause else R.drawable.play)
+                    if (activeController!!.playbackState!!.isActive) pauseDrawable else playDrawable
                 centerIcon?.setTint(contrastColor)
-                canvas.drawBitmap(
-                    centerIcon!!.toBitmap(), null, RectF(
-                        controlsCenter.x - radius.times(0.45f),
-                        controlsCenter.y - radius.times(0.45f),
-                        controlsCenter.x + radius.times(0.45f),
-                        controlsCenter.y + radius.times(0.45f),
-                    ), controlsPaint
+                centerIcon?.bounds = Rect(
+                    (controlsCenter.x - radius.times(0.45f)).roundToInt(),
+                    (controlsCenter.y - radius.times(0.45f)).roundToInt(),
+                    (controlsCenter.x + radius.times(0.45f)).roundToInt(),
+                    (controlsCenter.y + radius.times(0.45f)).roundToInt(),
                 )
+                centerIcon?.draw(canvas)
 
                 val controlsRectPath = Path()
                 controlsRectPath.addRoundRect(
@@ -509,28 +532,23 @@ class WallpaperService : WallpaperService() {
                 controlsRectPath.op(clearingCircle, Path.Op.DIFFERENCE)
                 canvas.drawPath(controlsRectPath, controlsPaint)
 
-                val previousIcon = getDrawable(R.drawable.previous)
-                previousIcon?.setTint(contrastColor)
-                canvas.drawBitmap(
-                    previousIcon!!.toBitmap(), null, RectF(
-                        controlsCenter.x - radius.times(1.35f),
-                        controlsCenter.y - radius.times(0.45f),
-                        controlsCenter.x - radius.times(0.45f),
-                        controlsCenter.y + radius.times(0.45f),
-                    ), controlsPaint
+                previousDrawable?.setTint(contrastColor)
+                previousDrawable?.bounds = Rect(
+                    (controlsCenter.x - radius.times(1.35f)).roundToInt(),
+                    (controlsCenter.y - radius.times(0.45f)).roundToInt(),
+                    (controlsCenter.x - radius.times(0.45f)).roundToInt(),
+                    (controlsCenter.y + radius.times(0.45f)).roundToInt(),
                 )
+                previousDrawable?.draw(canvas)
 
-                val nextIcon = getDrawable(R.drawable.next)
-                nextIcon?.setTint(contrastColor)
-                canvas.drawBitmap(
-                    nextIcon!!.toBitmap(), null, RectF(
-                        controlsCenter.x + radius.times(0.45f),
-                        controlsCenter.y - radius.times(0.45f),
-                        controlsCenter.x + radius.times(1.35f),
-                        controlsCenter.y + radius.times(0.45f),
-                    ), controlsPaint
+                nextDrawable?.setTint(contrastColor)
+                nextDrawable?.bounds = Rect(
+                    (controlsCenter.x + radius.times(0.45f)).roundToInt(),
+                    (controlsCenter.y - radius.times(0.45f)).roundToInt(),
+                    (controlsCenter.x + radius.times(1.35f)).roundToInt(),
+                    (controlsCenter.y + radius.times(0.45f)).roundToInt(),
                 )
-
+                nextDrawable?.draw(canvas)
             }
         }
 
@@ -549,6 +567,7 @@ class WallpaperService : WallpaperService() {
                         radius = width / 3f
                         mediaCenter = PointF(width / 2f, height / 2f + width / 4f)
                         controlsCenter = PointF(width / 2f, height / 2f + width / 2f + 20f)
+                        setAlbumArt()
                     }
                     var palette = Palette.from(listOf(Palette.Swatch(Color.WHITE, 100)))
                     if (backgroundImage != null) {
