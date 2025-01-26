@@ -29,6 +29,7 @@ import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory
+import androidx.core.graphics.drawable.toBitmap
 import androidx.palette.graphics.Palette
 import com.riskycase.jarvisEnhanced.R
 import dagger.hilt.android.AndroidEntryPoint
@@ -77,6 +78,7 @@ class WallpaperService : WallpaperService() {
         private var xOffset: Float = 0f
         private var clockCenter: PointF = PointF(0f, 0f)
         private var mediaCenter: PointF = PointF(0f, 0f)
+        private var controlsCenter: PointF = PointF(0f, 0f)
         private var radius: Float = 0f
 
         init {
@@ -138,17 +140,39 @@ class WallpaperService : WallpaperService() {
                         )
                     ).size > 0
                 ) {
+                    val mediaControlsRect = RectF(
+                        controlsCenter.x - radius.div(2f).times(1.25f),
+                        controlsCenter.y - radius.div(4f).times(0.85f),
+                        controlsCenter.x + radius.div(2f).times(1.25f),
+                        controlsCenter.y + radius.div(4f).times(0.85f),
+                    )
+                    val activeSession = mediaSessionManager.getActiveSessions(
+                        ComponentName(
+                            applicationContext, NotificationListener::class.java
+                        )
+                    )[0]
                     if (((mediaCenter.x - x.toFloat()).pow(2) + (mediaCenter.y - y.toFloat()).pow(2)) < (radius.div(
                             2f
                         ).pow(
                             2
                         ))
                     ) {
-                        mediaSessionManager.getActiveSessions(
-                            ComponentName(
-                                applicationContext, NotificationListener::class.java
-                            )
-                        )[0].sessionActivity?.send()
+                        activeSession.sessionActivity?.send()
+                    } else if (((controlsCenter.x - x.toFloat()).pow(2) + (controlsCenter.y - y.toFloat()).pow(
+                            2
+                        )) < (radius.div(4f).pow(2))
+                    ) {
+                        if (activeSession.playbackState!!.isActive) {
+                            activeSession.transportControls.pause()
+                        } else {
+                            activeSession.transportControls.play()
+                        }
+                    } else if (mediaControlsRect.contains(x.toFloat(), y.toFloat())) {
+                        if (x < width.div(2f)) {
+                            activeSession.transportControls.skipToPrevious()
+                        } else {
+                            activeSession.transportControls.skipToNext()
+                        }
                     }
                 }
             }
@@ -301,7 +325,7 @@ class WallpaperService : WallpaperService() {
             if (!keyguardManager.isKeyguardLocked) {
                 val textPaint = Paint()
                 textPaint.typeface = resources.getFont(R.font.dseg7modernmini)
-                textPaint.textSize = radius / 5f
+                textPaint.textSize = radius / 6f
                 var textBounds = Rect()
                 val currentTimeText = SimpleDateFormat(
                     if (now.get(Calendar.SECOND) % 2 == 0) "HH:mm:ss" else "HH mm ss", Locale.UK
@@ -439,6 +463,74 @@ class WallpaperService : WallpaperService() {
                     cornerRadius = radius
                 }.draw(canvas)
                 canvas.restore()
+
+                val controlsPaint = Paint()
+                controlsPaint.color = palette.getVibrantColor(Color.WHITE)
+                controlsPaint.style = Paint.Style.FILL
+                controlsPaint.isAntiAlias = true
+
+                val clearingCircle = Path()
+                clearingCircle.addCircle(
+                    controlsCenter.x, controlsCenter.y, radius.times(0.55f), Path.Direction.CW
+                )
+                clearingCircle.close()
+
+                val centerCircle = Path()
+                centerCircle.addCircle(
+                    controlsCenter.x, controlsCenter.y, radius.times(0.5f), Path.Direction.CW
+                )
+                centerCircle.close()
+                canvas.drawPath(centerCircle, controlsPaint)
+
+                val contrastColor =
+                    if (ColorUtils.calculateLuminance(palette.getVibrantColor(Color.WHITE)) > 0.5f) Color.BLACK else Color.WHITE
+                val centerIcon =
+                    getDrawable(if (activeSession.playbackState!!.isActive) R.drawable.pause else R.drawable.play)
+                centerIcon?.setTint(contrastColor)
+                canvas.drawBitmap(
+                    centerIcon!!.toBitmap(), null, RectF(
+                        controlsCenter.x - radius.times(0.45f),
+                        controlsCenter.y - radius.times(0.45f),
+                        controlsCenter.x + radius.times(0.45f),
+                        controlsCenter.y + radius.times(0.45f),
+                    ), controlsPaint
+                )
+
+                val controlsRectPath = Path()
+                controlsRectPath.addRoundRect(
+                    RectF(
+                        controlsCenter.x - radius.times(1.25f),
+                        controlsCenter.y - radius.div(2f).times(0.85f),
+                        controlsCenter.x + radius.times(1.25f),
+                        controlsCenter.y + radius.div(2f).times(0.85f),
+                    ), radius.div(6f), radius.div(6f), Path.Direction.CW
+                )
+                controlsRectPath.close()
+                controlsRectPath.op(clearingCircle, Path.Op.DIFFERENCE)
+                canvas.drawPath(controlsRectPath, controlsPaint)
+
+                val previousIcon = getDrawable(R.drawable.previous)
+                previousIcon?.setTint(contrastColor)
+                canvas.drawBitmap(
+                    previousIcon!!.toBitmap(), null, RectF(
+                        controlsCenter.x - radius.times(1.35f),
+                        controlsCenter.y - radius.times(0.45f),
+                        controlsCenter.x - radius.times(0.45f),
+                        controlsCenter.y + radius.times(0.45f),
+                    ), controlsPaint
+                )
+
+                val nextIcon = getDrawable(R.drawable.next)
+                nextIcon?.setTint(contrastColor)
+                canvas.drawBitmap(
+                    nextIcon!!.toBitmap(), null, RectF(
+                        controlsCenter.x + radius.times(0.45f),
+                        controlsCenter.y - radius.times(0.45f),
+                        controlsCenter.x + radius.times(1.35f),
+                        controlsCenter.y + radius.times(0.45f),
+                    ), controlsPaint
+                )
+
             }
         }
 
@@ -453,9 +545,10 @@ class WallpaperService : WallpaperService() {
                         clockCenter = PointF(width * 5f / 6f - 30f, width / 3f)
                         radius = width / 6f
                     } else {
-                        clockCenter = PointF(width / 2f, width * 2f / 3f)
-                        radius = width / 4f
-                        mediaCenter = PointF(width / 2f, height / 2f + width / 12f)
+                        clockCenter = PointF(width / 2f, width * 3f / 4f)
+                        radius = width / 3f
+                        mediaCenter = PointF(width / 2f, height / 2f + width / 4f)
+                        controlsCenter = PointF(width / 2f, height / 2f + width / 2f + 20f)
                     }
                     var palette = Palette.from(listOf(Palette.Swatch(Color.WHITE, 100)))
                     if (backgroundImage != null) {
@@ -474,7 +567,7 @@ class WallpaperService : WallpaperService() {
                     }
                     drawClock(canvas, clockCenter, radius, palette)
                     if (!keyguardManager.isKeyguardLocked) {
-                        drawMediaPlayer(canvas, mediaCenter, radius * 2f / 3f, palette)
+                        drawMediaPlayer(canvas, mediaCenter, radius / 2f, palette)
                     }
                     holder.unlockCanvasAndPost(canvas)
                 }
