@@ -20,6 +20,7 @@ import android.icu.util.Calendar
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
 import android.os.BatteryManager
 import android.os.Bundle
 import android.os.Handler
@@ -30,8 +31,6 @@ import android.service.wallpaper.WallpaperService
 import android.util.Log
 import android.view.SurfaceHolder
 import androidx.core.graphics.ColorUtils
-import androidx.core.graphics.drawable.RoundedBitmapDrawable
-import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory
 import androidx.palette.graphics.Palette
 import com.riskycase.jarvisEnhanced.R
 import dagger.hilt.android.AndroidEntryPoint
@@ -49,7 +48,15 @@ import kotlin.math.sqrt
 class WallpaperService : WallpaperService() {
 
     private var backgroundImage: Bitmap? = null
-    private var albumArtBitmap: RoundedBitmapDrawable? = null
+        set(it) {
+            it?.also { bitmap ->
+                backgroundImagePalette = Palette.Builder(bitmap).generate()
+            }
+            field = it
+        }
+    private var backgroundImagePalette: Palette =
+        Palette.from(listOf(Palette.Swatch(Color.WHITE, 100)))
+    private var albumArtBitmap: Bitmap? = null
     private var previousMediaMetadata: MediaMetadata? = null
 
     @Inject
@@ -86,6 +93,8 @@ class WallpaperService : WallpaperService() {
         private var controlsCenter: PointF = PointF(0f, 0f)
         private var radius: Float = 0f
         private var activeController: MediaController? = null
+        private var controllerCallbackMap = HashMap<String, MediaController.Callback>()
+        private var clockTextPaint = Paint()
 
         private var playDrawable = getDrawable(R.drawable.play)
         private var pauseDrawable = getDrawable(R.drawable.pause)
@@ -95,25 +104,44 @@ class WallpaperService : WallpaperService() {
         init {
             handler.post(drawRunner)
             mediaSessionManager.addOnActiveSessionsChangedListener({ controllers ->
-                activeController = if (controllers!!.size > 0) {
-                    controllers[0]
-                } else {
-                    null
-                }
+                activeController =
+                    controllers?.find { controller -> controller.playbackState?.isActive == true }
+                controllers?.forEach(this::registerCallbacksOnController)
+                Log.i(
+                    "WallpaperEngine",
+                    "Controllers updated to ${controllers?.joinToString(",") { controller -> controller.packageName }}"
+                )
             }, ComponentName(applicationContext, NotificationListener::class.java))
-            if (mediaSessionManager.getActiveSessions(
-                    ComponentName(
-                        applicationContext,
-                        NotificationListener::class.java
-                    )
-                ).size > 0
-            ) {
-                activeController = mediaSessionManager.getActiveSessions(
-                    ComponentName(
-                        applicationContext,
-                        NotificationListener::class.java
-                    )
-                )[0]
+            val controllers = mediaSessionManager.getActiveSessions(
+                ComponentName(
+                    applicationContext, NotificationListener::class.java
+                )
+            )
+            controllers.forEach(this::registerCallbacksOnController)
+            activeController =
+                controllers.find { controller -> controller.playbackState?.isActive == true }
+            clockTextPaint.typeface = resources.getFont(R.font.dseg7modernmini)
+        }
+
+        private fun registerCallbacksOnController(controller: MediaController) {
+            if (!controllerCallbackMap.contains(controller.packageName)) {
+                val callback = object : MediaController.Callback() {
+                    override fun onSessionDestroyed() {
+                        super.onSessionDestroyed()
+                        controllerCallbackMap.remove(controller.packageName)
+                        if (activeController == controller) activeController = null
+                    }
+
+                    override fun onPlaybackStateChanged(state: PlaybackState?) {
+                        super.onPlaybackStateChanged(state)
+                        if (state?.isActive == true) {
+                            activeController = controller
+                            setAlbumArt()
+                        }
+                    }
+                }
+                controllerCallbackMap.put(controller.packageName, callback)
+                controller.registerCallback(callback, handler)
             }
         }
 
@@ -199,25 +227,6 @@ class WallpaperService : WallpaperService() {
                 }
             }
             return Bundle()
-        }
-
-        private fun setAlbumArt() {
-            val currentMediaMetadata = activeController?.metadata
-            if (currentMediaMetadata != previousMediaMetadata) {
-                albumArtBitmap =
-                    RoundedBitmapDrawableFactory.create(
-                        resources, activeController!!.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-                    ).apply {
-                        setBounds(
-                            (mediaCenter.x - radius.div(2f)).toInt(),
-                            (mediaCenter.y - radius.div(2f)).toInt(),
-                            (mediaCenter.x + radius.div(2f)).toInt(),
-                            (mediaCenter.y + radius.div(2f)).toInt(),
-                        )
-                        cornerRadius = radius.div(2f)
-                    }
-                previousMediaMetadata = currentMediaMetadata
-            }
         }
 
         private fun drawHand(
@@ -364,17 +373,15 @@ class WallpaperService : WallpaperService() {
                 if (ColorUtils.calculateLuminance(palette.getVibrantColor(Color.WHITE)) > 0.5f) Color.BLACK else Color.WHITE
 
             if (!keyguardManager.isKeyguardLocked) {
-                val textPaint = Paint()
-                textPaint.typeface = resources.getFont(R.font.dseg7modernmini)
-                textPaint.textSize = radius / 6f
+                clockTextPaint.textSize = radius / 6f
                 var textBounds = Rect()
                 val currentTimeText = SimpleDateFormat(
                     if (now.get(Calendar.SECOND) % 2 == 0) "HH:mm:ss" else "HH mm ss", Locale.UK
                 ).format(now)
-                textPaint.getTextBounds("88:88:88", 0, 8, textBounds)
+                clockTextPaint.getTextBounds("88:88:88", 0, 8, textBounds)
                 var darkColorHSL = floatArrayOf(0f, 0f, 0f)
                 ColorUtils.colorToHSL(palette.getDarkVibrantColor(Color.DKGRAY), darkColorHSL)
-                textPaint.color =
+                clockTextPaint.color =
                     ColorUtils.HSLToColor(floatArrayOf(darkColorHSL[0], darkColorHSL[1], 0.47f))
                 canvas.drawRect(
                     RectF(
@@ -382,9 +389,9 @@ class WallpaperService : WallpaperService() {
                         center.y - (radius / 2f) - (textBounds.height().toFloat()) + 10f,
                         center.x + (textBounds.width().toFloat() / 2f) + 17.5f,
                         center.y - (radius / 2f) + 47.5f
-                    ), textPaint
+                    ), clockTextPaint
                 )
-                textPaint.color =
+                clockTextPaint.color =
                     ColorUtils.HSLToColor(floatArrayOf(darkColorHSL[0], darkColorHSL[1], 0.77f))
                 canvas.drawRect(
                     RectF(
@@ -392,21 +399,21 @@ class WallpaperService : WallpaperService() {
                         center.y - (radius / 2f) - (textBounds.height().toFloat()) + 20f,
                         center.x + (textBounds.width().toFloat() / 2f) + 10f,
                         center.y - (radius / 2f) + 40f
-                    ), textPaint
+                    ), clockTextPaint
                 )
-                textPaint.color = Color.argb(96, 128, 128, 128)
+                clockTextPaint.color = Color.argb(96, 128, 128, 128)
                 canvas.drawText(
                     "88:88:88",
                     center.x - (textBounds.width().toFloat() / 2f),
                     center.y - (radius / 2f) + 30f,
-                    textPaint
+                    clockTextPaint
                 )
-                textPaint.color = contrastColor
+                clockTextPaint.color = contrastColor
                 canvas.drawText(
                     currentTimeText,
                     center.x - (textBounds.width().toFloat() / 2f),
                     center.y - (radius / 2f) + 30f,
-                    textPaint
+                    clockTextPaint
                 )
             }
 
@@ -470,22 +477,48 @@ class WallpaperService : WallpaperService() {
             canvas.drawCircle(center.x, center.y, 25f, clockPaint)
         }
 
+        private fun setAlbumArt() {
+            val currentMediaMetadata = activeController?.metadata
+            if (currentMediaMetadata != previousMediaMetadata) {
+                albumArtBitmap =
+                    activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                previousMediaMetadata = currentMediaMetadata
+            }
+        }
+
         fun drawMediaPlayer(
             canvas: Canvas,
             center: PointF,
             radius: Float,
             palette: Palette,
         ) {
-            if (activeController != null) {
+            activeController?.also { activeController ->
                 canvas.save()
-                canvas.rotate(
-                    (activeController!!.playbackState!!.position.toFloat()).div(
-                        activeController!!.metadata!!.getLong(
-                            MediaMetadata.METADATA_KEY_DURATION
-                        )
-                    ).times(360f), center.x, center.y
-                )
-                albumArtBitmap?.draw(canvas)
+                activeController.metadata?.getLong(
+                    MediaMetadata.METADATA_KEY_DURATION
+                )?.let {
+                    (activeController.playbackState?.position?.toFloat())?.div(
+                        it
+                    )?.times(360f)
+                }?.let {
+                    canvas.rotate(
+                        it, center.x, center.y
+                    )
+                }
+                if (albumArtBitmap == null) {
+                    setAlbumArt()
+                }
+                albumArtBitmap?.let {
+                    val albumArtPath = Path()
+                    albumArtPath.addCircle(center.x, center.y, radius, Path.Direction.CW)
+                    canvas.clipPath(albumArtPath)
+                    canvas.drawBitmap(
+                        it, null, RectF(
+                            center.x - radius, center.y - radius,
+                            center.x + radius, center.y + radius,
+                        ), Paint()
+                    )
+                }
                 canvas.restore()
 
                 val controlsPaint = Paint()
@@ -509,7 +542,7 @@ class WallpaperService : WallpaperService() {
                 val contrastColor =
                     if (ColorUtils.calculateLuminance(palette.getVibrantColor(Color.WHITE)) > 0.5f) Color.BLACK else Color.WHITE
                 val centerIcon =
-                    if (activeController!!.playbackState!!.isActive) pauseDrawable else playDrawable
+                    if (activeController.playbackState?.isActive == true) pauseDrawable else playDrawable
                 centerIcon?.setTint(contrastColor)
                 centerIcon?.bounds = Rect(
                     (controlsCenter.x - radius.times(0.45f)).roundToInt(),
@@ -569,13 +602,11 @@ class WallpaperService : WallpaperService() {
                         controlsCenter = PointF(width / 2f, height / 2f + width / 2f + 20f)
                         setAlbumArt()
                     }
-                    var palette = Palette.from(listOf(Palette.Swatch(Color.WHITE, 100)))
                     if (backgroundImage != null) {
                         canvas.save()
                         canvas.translate(if (!isPreview) width * xOffset else 0f, 0f)
                         drawImageCover(canvas, backgroundImage!!, width, height)
                         canvas.restore()
-                        palette = Palette.from(backgroundImage!!).generate()
                     } else {
                         val blackPaint = Paint()
                         blackPaint.color = Color.BLACK
@@ -584,9 +615,9 @@ class WallpaperService : WallpaperService() {
                             RectF(0f, 0f, width.toFloat(), height.toFloat()), blackPaint
                         )
                     }
-                    drawClock(canvas, clockCenter, radius, palette)
+                    drawClock(canvas, clockCenter, radius, backgroundImagePalette)
                     if (!keyguardManager.isKeyguardLocked) {
-                        drawMediaPlayer(canvas, mediaCenter, radius / 2f, palette)
+                        drawMediaPlayer(canvas, mediaCenter, radius / 2f, backgroundImagePalette)
                     }
                     holder.unlockCanvasAndPost(canvas)
                 }
