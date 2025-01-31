@@ -7,8 +7,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.database.sqlite.SQLiteConstraintException
 import android.os.Build
@@ -37,6 +39,7 @@ import javax.inject.Inject
 class NotificationListener @Inject constructor() : NotificationListenerService() {
 
     private lateinit var filters: List<Filter>
+    private var componentName: ComponentName? = null
 
     @Inject
     lateinit var filterRepository: FilterRepository
@@ -113,6 +116,20 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
             ).find(notificationTitle)?.value
         }
         return sender
+    }
+
+    private fun toggleNotificationListenerService(componentName: ComponentName) {
+        val pm = packageManager
+        pm.setComponentEnabledSetting(
+            componentName,
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+            PackageManager.DONT_KILL_APP
+        )
+        pm.setComponentEnabledSetting(
+            componentName,
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+            PackageManager.DONT_KILL_APP
+        )
     }
 
     private fun goForeground() {
@@ -211,6 +228,14 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         readPendingSnaps()
-        return super.onStartCommand(intent, flags, startId)
+        if(componentName == null) {
+            componentName = ComponentName(this, this::class.java)
+        }
+
+        componentName?.let {
+            requestRebind(it)
+            toggleNotificationListenerService(it)
+        }
+        return START_REDELIVER_INTENT
     }
 }
