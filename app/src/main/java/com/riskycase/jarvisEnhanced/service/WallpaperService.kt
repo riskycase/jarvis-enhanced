@@ -53,7 +53,10 @@ class WallpaperService : WallpaperService() {
                 val backgroundImagePalette = Palette.Builder(bitmap).generate()
                 baseColor = backgroundImagePalette.getVibrantColor(Color.WHITE)
                 val darkColorHSL = floatArrayOf(0f, 0f, 0f)
-                ColorUtils.colorToHSL(backgroundImagePalette.getDarkVibrantColor(Color.DKGRAY), darkColorHSL)
+                ColorUtils.colorToHSL(
+                    backgroundImagePalette.getDarkVibrantColor(Color.DKGRAY),
+                    darkColorHSL
+                )
                 darkerBaseColor =
                     ColorUtils.HSLToColor(floatArrayOf(darkColorHSL[0], darkColorHSL[1], 0.47f))
                 darkBaseColor =
@@ -68,6 +71,30 @@ class WallpaperService : WallpaperService() {
     private var darkerBaseColor = Color.DKGRAY
     private var colorOnBaseColor = Color.BLACK
     private var albumArtBitmap: Bitmap? = null
+        set(value) {
+            // Recycle the old bitmap
+            field?.recycle()
+
+            value?.let { newBitmap ->
+                val width = newBitmap.width
+                val height = newBitmap.height
+                val smaller = minOf(width, height)
+                field = Bitmap.createBitmap(
+                    newBitmap,
+                    (width - smaller) / 2,
+                    (height - smaller) / 2,
+                    smaller,
+                    smaller
+                )
+
+                // If the new bitmap was cropped, recycle the original
+                if (field != newBitmap) {
+                    newBitmap.recycle()
+                }
+            } ?: run {
+                field = null
+            }
+        }
 
     @Inject
     lateinit var batteryManager: BatteryManager
@@ -138,13 +165,17 @@ class WallpaperService : WallpaperService() {
             mediaSessionManager.addOnActiveSessionsChangedListener({ controllers ->
                 activeController =
                     controllers?.find { controller -> controller.playbackState?.isActive == true }
-                albumArtBitmap = activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-                    ?: activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
-                    ?: activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
-                    ?: notificationListenerConnector.notificationListener?.getMediaNotificationByPackageName(activeController?.packageName)
+                albumArtBitmap =
+                    activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                        ?: activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+                                ?: activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+                                ?: notificationListenerConnector.notificationListener?.getMediaNotificationByPackageName(
+                            activeController?.packageName
+                        )
                 controllers?.forEach(this::registerCallbacksOnController)
             }, notificationListenerServiceComponentName)
-            val controllers = mediaSessionManager.getActiveSessions(notificationListenerServiceComponentName)
+            val controllers =
+                mediaSessionManager.getActiveSessions(notificationListenerServiceComponentName)
             controllers.forEach(this::registerCallbacksOnController)
             activeController =
                 controllers.find { controller -> controller.playbackState?.isActive == true }
@@ -164,25 +195,30 @@ class WallpaperService : WallpaperService() {
 
                     override fun onPlaybackStateChanged(state: PlaybackState?) {
                         super.onPlaybackStateChanged(state)
-                        if (state?.isActive == true) {
+                        if(state?.isActive == true)
                             activeController = controller
-                            albumArtBitmap?.recycle()
-                            albumArtBitmap = activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                        albumArtBitmap?.recycle()
+                        albumArtBitmap =
+                            activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
                                 ?: activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
-                                ?: activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
-                                ?: notificationListenerConnector.notificationListener?.getMediaNotificationByPackageName(activeController?.packageName)
-                        }
+                                        ?: activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+                                        ?: notificationListenerConnector.notificationListener?.getMediaNotificationByPackageName(
+                                    activeController?.packageName
+                                )
+
                     }
 
                     override fun onMetadataChanged(metadata: MediaMetadata?) {
                         super.onMetadataChanged(metadata)
-                        if(activeController == controller) {
+                        if (activeController == controller) {
                             albumArtBitmap?.recycle()
                             albumArtBitmap =
                                 metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-                                ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
-                                ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
-                                ?: notificationListenerConnector.notificationListener?.getMediaNotificationByPackageName(controller.packageName)
+                                    ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+                                            ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+                                            ?: notificationListenerConnector.notificationListener?.getMediaNotificationByPackageName(
+                                        controller.packageName
+                                    )
                         }
                     }
                 }
@@ -531,11 +567,13 @@ class WallpaperService : WallpaperService() {
                         it, center.x, center.y
                     )
                 }
-                if(albumArtBitmap == null)
-                    albumArtBitmap = activeController.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                if (albumArtBitmap == null) albumArtBitmap =
+                    activeController.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
                         ?: activeController.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
-                        ?: activeController.metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
-                        ?: notificationListenerConnector.notificationListener?.getMediaNotificationByPackageName(activeController.packageName)
+                                ?: activeController.metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+                                ?: notificationListenerConnector.notificationListener?.getMediaNotificationByPackageName(
+                            activeController.packageName
+                        )
                 albumArtBitmap?.let {
                     val albumArtPath = Path()
                     albumArtPath.addCircle(center.x, center.y, radius, Path.Direction.CW)
