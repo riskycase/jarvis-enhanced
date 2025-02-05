@@ -32,6 +32,7 @@ import android.view.SurfaceHolder
 import androidx.core.graphics.ColorUtils
 import androidx.palette.graphics.Palette
 import com.riskycase.jarvisEnhanced.R
+import com.riskycase.jarvisEnhanced.util.NotificationListenerConnector
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import javax.inject.Named
@@ -51,7 +52,7 @@ class WallpaperService : WallpaperService() {
             it?.also { bitmap ->
                 val backgroundImagePalette = Palette.Builder(bitmap).generate()
                 baseColor = backgroundImagePalette.getVibrantColor(Color.WHITE)
-                var darkColorHSL = floatArrayOf(0f, 0f, 0f)
+                val darkColorHSL = floatArrayOf(0f, 0f, 0f)
                 ColorUtils.colorToHSL(backgroundImagePalette.getDarkVibrantColor(Color.DKGRAY), darkColorHSL)
                 darkerBaseColor =
                     ColorUtils.HSLToColor(floatArrayOf(darkColorHSL[0], darkColorHSL[1], 0.47f))
@@ -76,6 +77,9 @@ class WallpaperService : WallpaperService() {
 
     @Inject
     lateinit var mediaSessionManager: MediaSessionManager
+
+    @Inject
+    lateinit var notificationListenerConnector: NotificationListenerConnector
 
     @Inject
     @Named("OddDateFormat")
@@ -135,6 +139,9 @@ class WallpaperService : WallpaperService() {
                 activeController =
                     controllers?.find { controller -> controller.playbackState?.isActive == true }
                 albumArtBitmap = activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                    ?: activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+                    ?: activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+                    ?: notificationListenerConnector.notificationListener?.getMediaNotificationByPackageName(activeController?.packageName)
                 controllers?.forEach(this::registerCallbacksOnController)
             }, notificationListenerServiceComponentName)
             val controllers = mediaSessionManager.getActiveSessions(notificationListenerServiceComponentName)
@@ -159,17 +166,27 @@ class WallpaperService : WallpaperService() {
                         super.onPlaybackStateChanged(state)
                         if (state?.isActive == true) {
                             activeController = controller
+                            albumArtBitmap?.recycle()
                             albumArtBitmap = activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                                ?: activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+                                ?: activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+                                ?: notificationListenerConnector.notificationListener?.getMediaNotificationByPackageName(activeController?.packageName)
                         }
                     }
 
                     override fun onMetadataChanged(metadata: MediaMetadata?) {
                         super.onMetadataChanged(metadata)
-                        if(activeController == controller)
-                            albumArtBitmap = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                        if(activeController == controller) {
+                            albumArtBitmap?.recycle()
+                            albumArtBitmap =
+                                metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                                ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+                                ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+                                ?: notificationListenerConnector.notificationListener?.getMediaNotificationByPackageName(controller.packageName)
+                        }
                     }
                 }
-                controllerCallbackMap.put(controller.packageName, callback)
+                controllerCallbackMap[controller.packageName] = callback
                 controller.registerCallback(callback, handler)
             }
         }
@@ -214,7 +231,7 @@ class WallpaperService : WallpaperService() {
         override fun onCommand(
             action: String?, x: Int, y: Int, z: Int, extras: Bundle?, resultRequested: Boolean
         ): Bundle {
-            if (WallpaperManager.COMMAND_TAP.equals(action) && !keyguardManager.isKeyguardLocked) {
+            if (WallpaperManager.COMMAND_TAP == action && !keyguardManager.isKeyguardLocked) {
                 if (((clockCenter.x - x.toFloat()).pow(2) + (clockCenter.y - y.toFloat()).pow(2)) < (radius.pow(
                         2
                     ))
@@ -496,7 +513,7 @@ class WallpaperService : WallpaperService() {
             canvas.drawCircle(center.x, center.y, 25f, clockPaint)
         }
 
-        fun drawMediaPlayer(
+        private fun drawMediaPlayer(
             canvas: Canvas,
             center: PointF,
             radius: Float,
@@ -514,6 +531,11 @@ class WallpaperService : WallpaperService() {
                         it, center.x, center.y
                     )
                 }
+                if(albumArtBitmap == null)
+                    albumArtBitmap = activeController.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                        ?: activeController.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+                        ?: activeController.metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+                        ?: notificationListenerConnector.notificationListener?.getMediaNotificationByPackageName(activeController.packageName)
                 albumArtBitmap?.let {
                     val albumArtPath = Path()
                     albumArtPath.addCircle(center.x, center.y, radius, Path.Direction.CW)

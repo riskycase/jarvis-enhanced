@@ -13,6 +13,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.database.sqlite.SQLiteConstraintException
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -20,6 +22,7 @@ import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
+import androidx.core.graphics.drawable.toBitmap
 import com.riskycase.jarvisEnhanced.R
 import com.riskycase.jarvisEnhanced.datastore.settingsDataStore
 import com.riskycase.jarvisEnhanced.models.Filter
@@ -27,6 +30,7 @@ import com.riskycase.jarvisEnhanced.models.Snap
 import com.riskycase.jarvisEnhanced.repository.FilterRepository
 import com.riskycase.jarvisEnhanced.repository.SnapRepository
 import com.riskycase.jarvisEnhanced.util.Constants
+import com.riskycase.jarvisEnhanced.util.NotificationListenerConnector
 import com.riskycase.jarvisEnhanced.util.NotificationMaker
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -49,6 +53,9 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
 
     @Inject
     lateinit var notificationMaker: NotificationMaker
+
+    @Inject
+    lateinit var notificationListenerConnector: NotificationListenerConnector
 
     @Inject
     @ApplicationContext
@@ -166,9 +173,17 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
 
     }
 
+    fun getMediaNotificationByPackageName(packageName: String?): Bitmap? {
+        return activeNotifications.filter { it.notification.extras.containsKey(Notification.EXTRA_MEDIA_SESSION) }
+            .firstOrNull { it.packageName == packageName }?.notification?.let {
+                it.getLargeIcon() ?: it.smallIcon
+            }?.loadDrawable(applicationContext)?.toBitmap()
+    }
+
     override fun onBind(intent: Intent?): IBinder? {
         notificationMaker.makeNotification()
         filterRepository.allFiltersLive.observeForever { filters -> this.filters = filters }
+        notificationListenerConnector.notificationListener  = this
         return super.onBind(intent)
     }
 
@@ -228,7 +243,7 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         readPendingSnaps()
-        if(componentName == null) {
+        if (componentName == null) {
             componentName = ComponentName(this, this::class.java)
         }
 
