@@ -32,7 +32,10 @@ import android.view.SurfaceHolder
 import androidx.core.graphics.ColorUtils
 import androidx.palette.graphics.Palette
 import com.riskycase.jarvisEnhanced.R
+import com.riskycase.jarvisEnhanced.util.AnimatorFloat
+import com.riskycase.jarvisEnhanced.util.AnimatorPointF
 import com.riskycase.jarvisEnhanced.util.NotificationListenerConnector
+import com.riskycase.jarvisEnhanced.util.getHandRotations
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import javax.inject.Named
@@ -54,8 +57,7 @@ class WallpaperService : WallpaperService() {
                 baseColor = backgroundImagePalette.getVibrantColor(Color.WHITE)
                 val darkColorHSL = floatArrayOf(0f, 0f, 0f)
                 ColorUtils.colorToHSL(
-                    backgroundImagePalette.getDarkVibrantColor(Color.DKGRAY),
-                    darkColorHSL
+                    backgroundImagePalette.getDarkVibrantColor(Color.DKGRAY), darkColorHSL
                 )
                 darkerBaseColor =
                     ColorUtils.HSLToColor(floatArrayOf(darkColorHSL[0], darkColorHSL[1], 0.47f))
@@ -80,11 +82,7 @@ class WallpaperService : WallpaperService() {
                 val height = newBitmap.height
                 val smaller = minOf(width, height)
                 field = Bitmap.createBitmap(
-                    newBitmap,
-                    (width - smaller) / 2,
-                    (height - smaller) / 2,
-                    smaller,
-                    smaller
+                    newBitmap, (width - smaller) / 2, (height - smaller) / 2, smaller, smaller
                 )
 
                 // If the new bitmap was cropped, recycle the original
@@ -144,11 +142,16 @@ class WallpaperService : WallpaperService() {
         private var height: Int = 0
         private var visible: Boolean = true
         private var xOffset: Float = 0f
-        private var clockCenter: PointF = PointF(0f, 0f)
+        private val lockUnlockAnimationDuration = 1000L
+        private val clockSweepAnimationDuration = 1000L
+        private val clockCenterAnimator =
+            AnimatorPointF(keyguardManager.isKeyguardLocked, PointF(0f, 0f))
+        private val hoursHandAnimator = AnimatorFloat(keyguardManager.isKeyguardLocked, 0f)
+        private val minutesHandAnimator = AnimatorFloat(keyguardManager.isKeyguardLocked, 0f)
+        private val secondsHandAnimator = AnimatorFloat(keyguardManager.isKeyguardLocked, 0f)
         private var mediaCenter: PointF = PointF(0f, 0f)
         private var controlsCenter: PointF = PointF(0f, 0f)
-        private var radius: Float = 0f
-
+        private val radiusAnimator = AnimatorFloat(keyguardManager.isKeyguardLocked, 0f)
         private var activeController: MediaController? = null
         private val controllerCallbackMap = HashMap<String, MediaController.Callback>()
         private val clockTextPaint = Paint()
@@ -195,8 +198,7 @@ class WallpaperService : WallpaperService() {
 
                     override fun onPlaybackStateChanged(state: PlaybackState?) {
                         super.onPlaybackStateChanged(state)
-                        if(state?.isActive == true)
-                            activeController = controller
+                        if (state?.isActive == true) activeController = controller
                         albumArtBitmap?.recycle()
                         albumArtBitmap =
                             activeController?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
@@ -231,6 +233,34 @@ class WallpaperService : WallpaperService() {
             this.visible = visible
             if (visible) {
                 handler.post(drawRunner)
+                if(!keyguardManager.isKeyguardLocked) {
+                    radiusAnimator.setAnimation(
+                        System.currentTimeMillis(),
+                        lockUnlockAnimationDuration,
+                        width * 3f,
+                        width / 3f
+                    )
+                    val finalCalendar = Calendar.getInstance()
+                    finalCalendar.add(Calendar.MILLISECOND, (lockUnlockAnimationDuration + clockSweepAnimationDuration).toInt())
+                    hoursHandAnimator.setAnimation(
+                        System.currentTimeMillis() + lockUnlockAnimationDuration,
+                        clockSweepAnimationDuration,
+                        0f,
+                        getHandRotations(finalCalendar, Calendar.HOUR)
+                    )
+                    minutesHandAnimator.setAnimation(
+                        System.currentTimeMillis() + lockUnlockAnimationDuration,
+                        clockSweepAnimationDuration,
+                        0f,
+                        getHandRotations(finalCalendar, Calendar.MINUTE)
+                    )
+                    secondsHandAnimator.setAnimation(
+                        System.currentTimeMillis() + lockUnlockAnimationDuration,
+                        clockSweepAnimationDuration,
+                        0f,
+                        getHandRotations(finalCalendar, Calendar.SECOND)
+                    )
+                }
             } else {
                 handler.removeCallbacks(drawRunner)
             }
@@ -247,6 +277,13 @@ class WallpaperService : WallpaperService() {
         ) {
             this.width = width
             this.height = height
+            if (keyguardManager.isKeyguardLocked) {
+                clockCenterAnimator.forceValue(PointF(width * 5f / 6f - 30f, width / 3f))
+                radiusAnimator.forceValue(width / 6f)
+            } else {
+                clockCenterAnimator.forceValue(PointF(width / 2f, width * 3f / 4f))
+                radiusAnimator.forceValue(width / 3f)
+            }
             super.onSurfaceChanged(holder, format, width, height)
         }
 
@@ -268,7 +305,10 @@ class WallpaperService : WallpaperService() {
             action: String?, x: Int, y: Int, z: Int, extras: Bundle?, resultRequested: Boolean
         ): Bundle {
             if (WallpaperManager.COMMAND_TAP == action && !keyguardManager.isKeyguardLocked) {
-                if (((clockCenter.x - x.toFloat()).pow(2) + (clockCenter.y - y.toFloat()).pow(2)) < (radius.pow(
+                val clockCenter = clockCenterAnimator.getValue(System.currentTimeMillis())
+                if (((clockCenter.x - x.toFloat()).pow(2) + (clockCenter.y - y.toFloat()).pow(2)) < (radiusAnimator.getValue(
+                        System.currentTimeMillis()
+                    ).pow(
                         2
                     ))
                 ) {
@@ -278,12 +318,18 @@ class WallpaperService : WallpaperService() {
                 }
                 if (activeController != null) {
                     val mediaControlsRect = RectF(
-                        controlsCenter.x - radius.div(2f).times(1.25f),
-                        controlsCenter.y - radius.div(4f).times(0.85f),
-                        controlsCenter.x + radius.div(2f).times(1.25f),
-                        controlsCenter.y + radius.div(4f).times(0.85f),
+                        controlsCenter.x - radiusAnimator.getValue(System.currentTimeMillis())
+                            .div(2f).times(1.25f),
+                        controlsCenter.y - radiusAnimator.getValue(System.currentTimeMillis())
+                            .div(4f).times(0.85f),
+                        controlsCenter.x + radiusAnimator.getValue(System.currentTimeMillis())
+                            .div(2f).times(1.25f),
+                        controlsCenter.y + radiusAnimator.getValue(System.currentTimeMillis())
+                            .div(4f).times(0.85f),
                     )
-                    if (((mediaCenter.x - x.toFloat()).pow(2) + (mediaCenter.y - y.toFloat()).pow(2)) < (radius.div(
+                    if (((mediaCenter.x - x.toFloat()).pow(2) + (mediaCenter.y - y.toFloat()).pow(2)) < (radiusAnimator.getValue(
+                            System.currentTimeMillis()
+                        ).div(
                             2f
                         ).pow(
                             2
@@ -292,7 +338,7 @@ class WallpaperService : WallpaperService() {
                         activeController!!.sessionActivity?.send()
                     } else if (((controlsCenter.x - x.toFloat()).pow(2) + (controlsCenter.y - y.toFloat()).pow(
                             2
-                        )) < (radius.div(4f).pow(2))
+                        )) < (radiusAnimator.getValue(System.currentTimeMillis()).div(4f).pow(2))
                     ) {
                         if (activeController!!.playbackState!!.isActive) {
                             activeController!!.transportControls.pause()
@@ -316,11 +362,13 @@ class WallpaperService : WallpaperService() {
             center: PointF,
             width: Float,
             height: Float,
-            rotation: Float,
+            animatorFloat: AnimatorFloat<Boolean>,
+            finalRotation: Float,
             handPaint: Paint,
             radius: Float,
             shadowPaint: Paint
         ) {
+            val rotation = animatorFloat.getValue(System.currentTimeMillis(), finalRotation)
             val sinValue = sin(rotation * PI / 180f).toFloat()
             val cosValue = cos(rotation * PI / 180f).toFloat()
 
@@ -503,10 +551,8 @@ class WallpaperService : WallpaperService() {
                 center,
                 15f,
                 radius.times(0.65f),
-                ((now.get(Calendar.HOUR).toFloat() / 12f) + (now.get(Calendar.MINUTE)
-                    .toFloat() / 720f) + (now.get(Calendar.SECOND).toFloat() / 43200f) + now.get(
-                    Calendar.MILLISECOND
-                ).toFloat() / 43200000f) * 360f,
+                hoursHandAnimator,
+                getHandRotations(now, Calendar.HOUR),
                 clockPaint,
                 radius.minus(7.5f),
                 shadowPaint
@@ -518,10 +564,8 @@ class WallpaperService : WallpaperService() {
                 center,
                 10f,
                 radius.minus(7.5f),
-                ((now.get(Calendar.MINUTE).toFloat() / 60f) + (now.get(Calendar.SECOND)
-                    .toFloat() / 3600f) + now.get(
-                    Calendar.MILLISECOND
-                ).toFloat() / 3600000f) * 360f,
+                minutesHandAnimator,
+                getHandRotations(now, Calendar.MINUTE),
                 clockPaint,
                 radius.minus(7.5f),
                 shadowPaint
@@ -533,9 +577,8 @@ class WallpaperService : WallpaperService() {
                 center,
                 4f,
                 radius.minus(7.5f),
-                ((now.get(Calendar.SECOND).toFloat() / 60f) + now.get(
-                    Calendar.MILLISECOND
-                ).toFloat() / 60000f) * 360f,
+                secondsHandAnimator,
+                getHandRotations(now, Calendar.SECOND),
                 clockPaint,
                 radius.minus(7.5f),
                 shadowPaint
@@ -651,18 +694,42 @@ class WallpaperService : WallpaperService() {
         }
 
         private fun draw() {
-            val nextDraw = SystemClock.uptimeMillis() + (1000 / 24)
+            val nextDraw = SystemClock.uptimeMillis() + (1000 / 60)
             val holder = surfaceHolder
             val canvas: Canvas?
             if (visible) {
                 canvas = holder.lockHardwareCanvas()
                 if (canvas != null) {
                     if (keyguardManager.isKeyguardLocked) {
-                        clockCenter = PointF(width * 5f / 6f - 30f, width / 3f)
-                        radius = width / 6f
+                        clockCenterAnimator.setAnimation(
+                            System.currentTimeMillis(),
+                            lockUnlockAnimationDuration,
+                            PointF(width / 2f, width * 3f / 4f),
+                            PointF(width * 5f / 6f - 30f, width / 3f),
+                            keyguardManager.isKeyguardLocked
+                        )
+                        radiusAnimator.setAnimation(
+                            System.currentTimeMillis(),
+                            lockUnlockAnimationDuration,
+                            width / 3f,
+                            width / 6f,
+                            keyguardManager.isKeyguardLocked
+                        )
                     } else {
-                        clockCenter = PointF(width / 2f, width * 3f / 4f)
-                        radius = width / 3f
+                        clockCenterAnimator.setAnimation(
+                            System.currentTimeMillis(),
+                            lockUnlockAnimationDuration,
+                            PointF(width / 2f, width * 3f / 4f),
+                            PointF(width / 2f, width * 3f / 4f),
+                            keyguardManager.isKeyguardLocked
+                        )
+                        radiusAnimator.setAnimation(
+                            System.currentTimeMillis(),
+                            lockUnlockAnimationDuration,
+                            width * 3f,
+                            width / 3f,
+                            keyguardManager.isKeyguardLocked
+                        )
                         mediaCenter = PointF(width / 2f, height / 2f + width / 4f)
                         controlsCenter = PointF(width / 2f, height / 2f + width / 2f + 20f)
                     }
@@ -679,9 +746,13 @@ class WallpaperService : WallpaperService() {
                             RectF(0f, 0f, width.toFloat(), height.toFloat()), blackPaint
                         )
                     }
-                    drawClock(canvas, clockCenter, radius)
+                    drawClock(
+                        canvas,
+                        clockCenterAnimator.getValue(System.currentTimeMillis()),
+                        radiusAnimator.getValue(System.currentTimeMillis())
+                    )
                     if (!keyguardManager.isKeyguardLocked) {
-                        drawMediaPlayer(canvas, mediaCenter, radius / 2f)
+                        drawMediaPlayer(canvas, mediaCenter, width / 6f)
                     }
                     holder.unlockCanvasAndPost(canvas)
                 }
