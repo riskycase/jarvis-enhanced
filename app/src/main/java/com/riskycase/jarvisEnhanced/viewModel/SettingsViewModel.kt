@@ -9,8 +9,11 @@ import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.riskycase.jarvisEnhanced.datastore.settingsDataStore
 import com.riskycase.jarvisEnhanced.service.NotificationListener
+import com.riskycase.jarvisEnhanced.util.NasaApodFetchWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -93,6 +96,11 @@ class SettingsViewModel @Inject constructor(
                     .build()
             }
         }
+    }
+
+    fun refreshApod() {
+        val nasaApodFetchRequest = OneTimeWorkRequestBuilder<NasaApodFetchWorker>().build()
+        WorkManager.getInstance(applicationContext).enqueue(nasaApodFetchRequest)
     }
 
 }

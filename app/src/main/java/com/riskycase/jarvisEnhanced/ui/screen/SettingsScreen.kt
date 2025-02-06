@@ -133,6 +133,15 @@ fun SettingsScreen(
                 .fillMaxWidth(1f)) {
                 Text("Update NASA API key", fontSize = 20.sp)
             }
+            Divider()
+            Column(modifier = Modifier
+                .clickable {
+                    settingsViewModel.refreshApod()
+                }
+                .padding(16.dp)
+                .fillMaxWidth(1f)) {
+                Text("Force update NASA APOD", fontSize = 20.sp)
+            }
         }
     }
 }
