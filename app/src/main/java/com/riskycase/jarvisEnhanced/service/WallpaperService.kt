@@ -663,10 +663,10 @@ class WallpaperService : WallpaperService() {
                             RectF(0f, 0f, width.toFloat(), height.toFloat()), blackPaint
                         )
                     }
-                    drawClock(canvas)
                     if (!keyguardManager.isKeyguardLocked) {
                         drawMediaPlayer(canvas, mediaCenter, width / 6f)
                     }
+                    drawClock(canvas)
                     holder.unlockCanvasAndPost(canvas)
                 }
             }
