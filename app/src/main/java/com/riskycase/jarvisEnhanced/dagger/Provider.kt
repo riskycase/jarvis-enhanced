@@ -8,6 +8,7 @@ import android.media.session.MediaSessionManager
 import android.os.BatteryManager
 import com.riskycase.jarvisEnhanced.service.NotificationListener
 import com.riskycase.jarvisEnhanced.util.Animator
+import com.riskycase.jarvisEnhanced.util.ClockConstants
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

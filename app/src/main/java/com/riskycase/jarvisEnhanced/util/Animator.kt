@@ -14,18 +14,6 @@ abstract class Animator<T : Comparable<T>, V : Any>(initialT: T, initialV: V) {
     protected var startValue: V = initialV
     protected var endValue: V = initialV
 
-    fun setAnimation(
-        startTime: Long, duration: Long, startValue: V, endValue: V, newComparebleValue: T
-    ) {
-        if (!previousValue.equals(newComparebleValue)) {
-            this.startTime = startTime
-            this.endTime = startTime + duration
-            this.startValue = startValue
-            this.endValue = endValue
-            this.previousValue = newComparebleValue
-        }
-    }
-
     fun setAnimation(startTime: Long, duration: Long, startValue: V, endValue: V) {
         this.startTime = startTime
         this.endTime = startTime + duration
@@ -50,9 +38,9 @@ class AnimatorFloat<T : Comparable<T>>(initialT: T, initialFloat: Float) :
         return getValue(time, endValue)
     }
 
-    override fun getValue(time: Long, fallback: Float): Float {
+    override fun getValue(time: Long, fallbackV: Float): Float {
         return if (time < this.startTime) startValue
-        else if (time > this.endTime) fallback
+        else if (time > this.endTime) fallbackV
         else startValue + ((endValue - startValue) * bezierEasing.transform((time - startTime).toFloat() / (endTime - startTime).toFloat()))
     }
 }
@@ -63,9 +51,9 @@ class AnimatorPointF<T : Comparable<T>>(initialT: T, initialPointF: PointF) :
         return getValue(time, endValue)
     }
 
-    override fun getValue(time: Long, fallback: PointF): PointF {
+    override fun getValue(time: Long, fallbackV: PointF): PointF {
         return if (time < this.startTime) startValue
-        else if (time > this.endTime) fallback
+        else if (time > this.endTime) fallbackV
         else PointF(
             startValue.x + ((endValue.x - startValue.x) * bezierEasing.transform((time - startTime).toFloat() / (endTime - startTime).toFloat())),
             startValue.y + ((endValue.y - startValue.y) * bezierEasing.transform((time - startTime).toFloat() / (endTime - startTime).toFloat()))
