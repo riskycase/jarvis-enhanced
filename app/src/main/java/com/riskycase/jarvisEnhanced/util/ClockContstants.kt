@@ -1,14 +1,28 @@
 package com.riskycase.jarvisEnhanced.util
 
 import android.app.KeyguardManager
+import android.content.Context
+import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.PointF
+import android.graphics.Rect
 import android.icu.util.Calendar
+import com.riskycase.jarvisEnhanced.R
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
+import javax.inject.Named
 
-class ClockConstants @Inject constructor(val keyguardManager: KeyguardManager) {
+class ClockConstants @Inject constructor(
+    private val keyguardManager: KeyguardManager,
+    @ApplicationContext applicationContext: Context
+) {
 
     private var width = 0
     private var height = 0
+    private var textPaint = Paint()
+    private var textBounds = Rect()
+    private val clockShadowPaint = Paint()
+
     private var previousCenterState =
         if (keyguardManager.isKeyguardLocked) ClockCenterStates.KEYGUARD_LOCKED else ClockCenterStates.KEYGUARD_UNLOCKED
     private var previousVisibleState = ClockRadiusStates.NOT_VISIBLE
@@ -31,20 +45,33 @@ class ClockConstants @Inject constructor(val keyguardManager: KeyguardManager) {
     private val clockVisibilityAnimationDuration = 1000L
     private val clockSweepAnimationDuration = 1000L
 
+    @Inject
+    @Named("7SegmentAllOnString")
+    lateinit var allOnString: String
+
+    init {
+        textPaint.typeface = applicationContext.resources.getFont(R.font.dseg7modernmini)
+        clockShadowPaint.color = Color.argb(64, 0, 0, 0)
+        clockShadowPaint.style = Paint.Style.FILL
+    }
+
     private fun getHandRotations(calendar: Calendar, value: Int): Float {
         return when (value) {
             Calendar.HOUR -> ((calendar.get(Calendar.HOUR)
-                .toFloat() / 12f) + (calendar.get(Calendar.MINUTE).toFloat() / 720f) + (calendar.get(
+                .toFloat() / 12f) + (calendar.get(Calendar.MINUTE)
+                .toFloat() / 720f) + (calendar.get(
                 Calendar.SECOND
             ).toFloat() / 43200f) + calendar.get(Calendar.MILLISECOND).toFloat() / 43200000f) * 360f
 
-            Calendar.MINUTE -> ((calendar.get(Calendar.MINUTE)
-                .toFloat() / 60f) + (calendar.get(Calendar.SECOND).toFloat() / 3600f) + calendar.get(
+            Calendar.MINUTE -> ((calendar.get(Calendar.MINUTE).toFloat() / 60f) + (calendar.get(
+                Calendar.SECOND
+            ).toFloat() / 3600f) + calendar.get(
                 Calendar.MILLISECOND
             ).toFloat() / 3600000f) * 360f
 
-            Calendar.SECOND -> ((calendar.get(Calendar.SECOND)
-                .toFloat() / 60f) + calendar.get(Calendar.MILLISECOND).toFloat() / 60000f) * 360f
+            Calendar.SECOND -> ((calendar.get(Calendar.SECOND).toFloat() / 60f) + calendar.get(
+                Calendar.MILLISECOND
+            ).toFloat() / 60000f) * 360f
 
             else -> 0f
         }
@@ -201,6 +228,20 @@ class ClockConstants @Inject constructor(val keyguardManager: KeyguardManager) {
             Calendar.MINUTE -> minuteHandRotationAnimator
             else -> secondHandRotationAnimator
         }).getValue(System.currentTimeMillis(), finalRotation)
+    }
+
+    fun getClockTextPaint(): Paint {
+        textPaint.textSize = clockRadiusAnimator.getValue(System.currentTimeMillis()) / 6f
+        return textPaint
+    }
+
+    fun getTextBounds(): Rect {
+        getClockTextPaint().getTextBounds(allOnString, 0, 8, textBounds)
+        return textBounds
+    }
+
+    fun getClockShadowPaint(): Paint {
+        return clockShadowPaint
     }
 
 }
