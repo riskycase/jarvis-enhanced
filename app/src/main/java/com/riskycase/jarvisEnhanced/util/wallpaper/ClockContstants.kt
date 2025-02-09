@@ -1,4 +1,4 @@
-package com.riskycase.jarvisEnhanced.util
+package com.riskycase.jarvisEnhanced.util.wallpaper
 
 import android.app.KeyguardManager
 import android.content.Context
@@ -11,11 +11,24 @@ import com.riskycase.jarvisEnhanced.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Named
+import javax.inject.Singleton
 
+@Singleton
 class ClockConstants @Inject constructor(
     private val keyguardManager: KeyguardManager,
     @ApplicationContext applicationContext: Context
 ) {
+
+    enum class ClockCenterStates {
+        KEYGUARD_LOCKED,
+        KEYGUARD_UNLOCKED
+    }
+
+    enum class ClockRadiusStates {
+        KEYGUARD_LOCKED,
+        KEYGUARD_UNLOCKED,
+        NOT_VISIBLE
+    }
 
     private var width = 0
     private var height = 0

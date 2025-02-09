@@ -10,17 +10,6 @@ class Constants {
     }
 }
 
-enum class ClockCenterStates {
-    KEYGUARD_LOCKED,
-    KEYGUARD_UNLOCKED
-}
-
-enum class ClockRadiusStates {
-    KEYGUARD_LOCKED,
-    KEYGUARD_UNLOCKED,
-    NOT_VISIBLE
-}
-
 object Destinations {
     const val HOME = "home"
     const val FILTERS = "filters"

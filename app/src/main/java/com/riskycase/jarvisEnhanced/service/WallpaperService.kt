@@ -4,7 +4,6 @@ import android.app.KeyguardManager
 import android.app.WallpaperManager
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
@@ -23,10 +22,9 @@ import android.os.SystemClock
 import android.provider.AlarmClock
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
-import androidx.core.graphics.ColorUtils
-import androidx.palette.graphics.Palette
-import com.riskycase.jarvisEnhanced.util.ClockConstants
-import com.riskycase.jarvisEnhanced.util.MediaUtils
+import com.riskycase.jarvisEnhanced.util.wallpaper.BackgroundImageUtils
+import com.riskycase.jarvisEnhanced.util.wallpaper.ClockConstants
+import com.riskycase.jarvisEnhanced.util.wallpaper.MediaUtils
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import javax.inject.Named
@@ -39,29 +37,6 @@ import kotlin.math.sqrt
 
 @AndroidEntryPoint
 class WallpaperService : WallpaperService() {
-
-    private var backgroundImage: Bitmap? = null
-        set(it) {
-            it?.also { bitmap ->
-                val backgroundImagePalette = Palette.Builder(bitmap).generate()
-                baseColor = backgroundImagePalette.getVibrantColor(Color.WHITE)
-                val darkColorHSL = floatArrayOf(0f, 0f, 0f)
-                ColorUtils.colorToHSL(
-                    backgroundImagePalette.getDarkVibrantColor(Color.DKGRAY), darkColorHSL
-                )
-                darkerBaseColor =
-                    ColorUtils.HSLToColor(floatArrayOf(darkColorHSL[0], darkColorHSL[1], 0.47f))
-                darkBaseColor =
-                    ColorUtils.HSLToColor(floatArrayOf(darkColorHSL[0], darkColorHSL[1], 0.77f))
-                colorOnBaseColor =
-                    if (ColorUtils.calculateLuminance(baseColor) > 0.5f) Color.BLACK else Color.WHITE
-            }
-            field = it
-        }
-    private var baseColor = Color.WHITE
-    private var darkBaseColor = Color.GRAY
-    private var darkerBaseColor = Color.DKGRAY
-    private var colorOnBaseColor = Color.BLACK
 
     @Inject
     lateinit var batteryManager: BatteryManager
@@ -76,6 +51,9 @@ class WallpaperService : WallpaperService() {
     lateinit var mediaUtils: MediaUtils
 
     @Inject
+    lateinit var backgroundImageUtils: BackgroundImageUtils
+
+    @Inject
     @Named("OddDateFormat")
     lateinit var oddSimpleDateFormat: SimpleDateFormat
 
@@ -86,13 +64,6 @@ class WallpaperService : WallpaperService() {
     @Inject
     @Named("7SegmentAllOnString")
     lateinit var allOnString: String
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        applicationContext.openFileInput("wallpaper").use {
-            backgroundImage = BitmapFactory.decodeStream(it)
-        }
-        return super.onStartCommand(intent, flags, startId)
-    }
 
     override fun onCreateEngine(): Engine {
         return MyWallpaperEngine()
@@ -297,7 +268,7 @@ class WallpaperService : WallpaperService() {
             )
 
             val bodyPaint = Paint()
-            bodyPaint.color = baseColor
+            bodyPaint.color = backgroundImageUtils.getBaseColor()
             bodyPaint.style = Paint.Style.FILL
 
             // Main face
@@ -309,7 +280,7 @@ class WallpaperService : WallpaperService() {
             canvas.drawCircle(center.x, center.y, radius.plus(7.5f), bodyPaint)
 
             val now = Calendar.getInstance()
-            val contrastColor = colorOnBaseColor
+            val contrastColor = backgroundImageUtils.getColorOnBaseColor()
 
             if (!keyguardManager.isKeyguardLocked) {
                 val clockTextPaint = clockConstants.getClockTextPaint()
@@ -318,7 +289,7 @@ class WallpaperService : WallpaperService() {
                         now
                     )
                 val textBounds = clockConstants.getTextBounds()
-                clockTextPaint.color = darkerBaseColor
+                clockTextPaint.color = backgroundImageUtils.getDarkerBaseColor()
                 canvas.drawRect(
                     RectF(
                         center.x - (textBounds.width().toFloat() / 2f) - 20f,
@@ -327,7 +298,7 @@ class WallpaperService : WallpaperService() {
                         center.y - (radius / 2f) + 47.5f
                     ), clockTextPaint
                 )
-                clockTextPaint.color = darkBaseColor
+                clockTextPaint.color = backgroundImageUtils.getDarkBaseColor()
                 canvas.drawRect(
                     RectF(
                         center.x - (textBounds.width().toFloat() / 2f) - 10f,
@@ -398,19 +369,20 @@ class WallpaperService : WallpaperService() {
         }
 
         private fun draw() {
-            val nextDraw = SystemClock.uptimeMillis() + (1000 / 24)
+            val nextDraw = SystemClock.uptimeMillis() + (1000 / 30)
             val holder = surfaceHolder
             val canvas: Canvas?
             clockConstants.updateVisibility(visible)
             if (visible) {
                 canvas = holder.lockHardwareCanvas()
                 if (canvas != null) {
-                    if (backgroundImage != null) {
+                    backgroundImageUtils.getBackgroundImage()?.also { backgroundImage ->
                         canvas.save()
                         canvas.translate(if (!isPreview) width * xOffset else 0f, 0f)
-                        drawImageCover(canvas, backgroundImage!!, width, height)
+                        drawImageCover(canvas, backgroundImage, width, height)
                         canvas.restore()
-                    } else {
+                    }
+                    if (backgroundImageUtils.getBackgroundImage() == null) {
                         val blackPaint = Paint()
                         blackPaint.color = Color.BLACK
                         blackPaint.style = Paint.Style.FILL
@@ -418,9 +390,7 @@ class WallpaperService : WallpaperService() {
                             RectF(0f, 0f, width.toFloat(), height.toFloat()), blackPaint
                         )
                     }
-                    if (!keyguardManager.isKeyguardLocked) {
-                        mediaUtils.drawMediaPlayer(canvas, baseColor, colorOnBaseColor)
-                    }
+                    mediaUtils.drawMediaPlayer(canvas)
                     drawClock(canvas)
                     holder.unlockCanvasAndPost(canvas)
                 }

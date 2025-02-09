@@ -1,5 +1,6 @@
-package com.riskycase.jarvisEnhanced.util
+package com.riskycase.jarvisEnhanced.util.wallpaper
 
+import android.app.KeyguardManager
 import android.content.ComponentName
 import android.content.Context
 import android.graphics.Bitmap
@@ -14,17 +15,20 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import com.riskycase.jarvisEnhanced.R
+import com.riskycase.jarvisEnhanced.util.NotificationListenerConnector
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Named
+import javax.inject.Singleton
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
+@Singleton
 class MediaUtils @Inject constructor(
     mediaSessionManager: MediaSessionManager,
+    @ApplicationContext applicationContext: Context,
     @Named("NotificationListenerServiceComponentName") private val notificationListenerServiceComponentName: ComponentName,
-    private val notificationListenerConnector: NotificationListenerConnector,
-    @ApplicationContext applicationContext: Context
+    private val notificationListenerConnector: NotificationListenerConnector
 ) {
 
     private var albumArtBitmap: Bitmap? = null
@@ -63,6 +67,12 @@ class MediaUtils @Inject constructor(
 
     private var activeController: MediaController? = null
     private val controllerCallbackMap = HashMap<String, MediaController.Callback>()
+
+    @Inject
+    lateinit var backgroundImageUtils: BackgroundImageUtils
+
+    @Inject
+    lateinit var keyguardManager: KeyguardManager
 
     init {
         mediaSessionManager.addOnActiveSessionsChangedListener(
@@ -187,10 +197,10 @@ class MediaUtils @Inject constructor(
         }
     }
 
-    private fun drawMediaControls(canvas: Canvas, baseColor: Int, tintColor: Int) {
+    private fun drawMediaControls(canvas: Canvas) {
 
         val controlsPaint = Paint()
-        controlsPaint.color = baseColor
+        controlsPaint.color = backgroundImageUtils.getBaseColor()
         controlsPaint.style = Paint.Style.FILL
         controlsPaint.isAntiAlias = true
 
@@ -215,22 +225,24 @@ class MediaUtils @Inject constructor(
         controlsRectPath.op(clearingCircle, Path.Op.DIFFERENCE)
         canvas.drawPath(controlsRectPath, controlsPaint)
 
-        pauseDrawable?.setTint(tintColor)
-        playDrawable?.setTint(tintColor)
+        pauseDrawable?.setTint(backgroundImageUtils.getColorOnBaseColor())
+        playDrawable?.setTint(backgroundImageUtils.getColorOnBaseColor())
         (if (activeController?.playbackState?.isActive == true) pauseDrawable else playDrawable)?.draw(
             canvas
         )
 
-        previousDrawable?.setTint(tintColor)
+        previousDrawable?.setTint(backgroundImageUtils.getColorOnBaseColor())
         previousDrawable?.draw(canvas)
 
-        nextDrawable?.setTint(tintColor)
+        nextDrawable?.setTint(backgroundImageUtils.getColorOnBaseColor())
         nextDrawable?.draw(canvas)
     }
 
-    fun drawMediaPlayer(canvas: Canvas, baseColor: Int, tintColor: Int) {
-        drawAlbumArt(canvas)
-        drawMediaControls(canvas, baseColor, tintColor)
+    fun drawMediaPlayer(canvas: Canvas) {
+        if (!keyguardManager.isKeyguardLocked) {
+            drawAlbumArt(canvas)
+            drawMediaControls(canvas)
+        }
     }
 
     fun handleTouchInput(x: Int, y: Int) {

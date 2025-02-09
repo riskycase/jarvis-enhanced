@@ -1,4 +1,4 @@
-package com.riskycase.jarvisEnhanced.util
+package com.riskycase.jarvisEnhanced.util.wallpaper
 
 import android.graphics.PointF
 import androidx.compose.animation.core.EaseOut
