@@ -239,7 +239,7 @@ class MediaUtils @Inject constructor(
     }
 
     fun drawMediaPlayer(canvas: Canvas) {
-        if (!keyguardManager.isKeyguardLocked) {
+        if (!keyguardManager.isKeyguardLocked) activeController?.also {
             drawAlbumArt(canvas)
             drawMediaControls(canvas)
         }
