@@ -7,6 +7,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.riskycase.jarvisEnhanced.datastore.settingsDataStore
 import com.riskycase.jarvisEnhanced.retrofit.interfaces.NasaApi
+import com.riskycase.jarvisEnhanced.util.SystemServicesContainer
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
@@ -18,7 +19,8 @@ import retrofit2.converter.gson.GsonConverterFactory
 class NasaApodFetchWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted workerParams: WorkerParameters,
-    private val backgroundImageUtils: BackgroundImageUtils
+    private val backgroundImageUtils: BackgroundImageUtils,
+    private val systemServicesContainer: SystemServicesContainer
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
@@ -34,6 +36,7 @@ class NasaApodFetchWorker @AssistedInject constructor(
             }
             applicationContext.openFileInput("wallpaper").use {
                 backgroundImageUtils.setBackgroundImage(BitmapFactory.decodeStream(it))
+                systemServicesContainer.wallpaperEngine?.notifyColorsChanged()
             }
             Result.success()
         } catch (e: Exception) {

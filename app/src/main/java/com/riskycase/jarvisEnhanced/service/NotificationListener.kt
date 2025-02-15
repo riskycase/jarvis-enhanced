@@ -29,7 +29,7 @@ import com.riskycase.jarvisEnhanced.models.Snap
 import com.riskycase.jarvisEnhanced.repository.FilterRepository
 import com.riskycase.jarvisEnhanced.repository.SnapRepository
 import com.riskycase.jarvisEnhanced.util.Constants
-import com.riskycase.jarvisEnhanced.util.NotificationListenerConnector
+import com.riskycase.jarvisEnhanced.util.SystemServicesContainer
 import com.riskycase.jarvisEnhanced.util.NotificationMaker
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -54,7 +54,7 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
     lateinit var notificationMaker: NotificationMaker
 
     @Inject
-    lateinit var notificationListenerConnector: NotificationListenerConnector
+    lateinit var systemServicesContainer: SystemServicesContainer
 
     @Inject
     @ApplicationContext
@@ -182,7 +182,7 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
     override fun onBind(intent: Intent?): IBinder? {
         notificationMaker.makeNotification()
         filterRepository.allFiltersLive.observeForever { filters -> this.filters = filters }
-        notificationListenerConnector.notificationListener  = this
+        systemServicesContainer.notificationListener  = this
         return super.onBind(intent)
     }
 

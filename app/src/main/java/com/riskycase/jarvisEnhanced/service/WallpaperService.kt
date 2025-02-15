@@ -1,8 +1,8 @@
 package com.riskycase.jarvisEnhanced.service
 
 import android.app.KeyguardManager
+import android.app.WallpaperColors
 import android.app.WallpaperManager
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -12,16 +12,15 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.provider.AlarmClock
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
+import com.riskycase.jarvisEnhanced.util.SystemServicesContainer
 import com.riskycase.jarvisEnhanced.util.wallpaper.BackgroundImageUtils
 import com.riskycase.jarvisEnhanced.util.wallpaper.ClockUtils
 import com.riskycase.jarvisEnhanced.util.wallpaper.MediaUtils
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlin.math.max
-import kotlin.math.pow
 
 @AndroidEntryPoint
 class WallpaperService : WallpaperService() {
@@ -37,6 +36,9 @@ class WallpaperService : WallpaperService() {
 
     @Inject
     lateinit var backgroundImageUtils: BackgroundImageUtils
+
+    @Inject
+    lateinit var systemServicesContainer: SystemServicesContainer
 
     override fun onCreateEngine(): Engine {
         return MyWallpaperEngine()
@@ -54,6 +56,11 @@ class WallpaperService : WallpaperService() {
 
         init {
             handler.post(drawRunner)
+            systemServicesContainer.wallpaperEngine = this
+        }
+
+        override fun onComputeColors(): WallpaperColors? {
+            return backgroundImageUtils.getBackgroundImage()?.let { WallpaperColors.fromBitmap(it) }
         }
 
         override fun onVisibilityChanged(visible: Boolean) {

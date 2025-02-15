@@ -15,7 +15,7 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import com.riskycase.jarvisEnhanced.R
-import com.riskycase.jarvisEnhanced.util.NotificationListenerConnector
+import com.riskycase.jarvisEnhanced.util.SystemServicesContainer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Named
@@ -28,7 +28,7 @@ class MediaUtils @Inject constructor(
     mediaSessionManager: MediaSessionManager,
     @ApplicationContext applicationContext: Context,
     @Named("NotificationListenerServiceComponentName") private val notificationListenerServiceComponentName: ComponentName,
-    private val notificationListenerConnector: NotificationListenerConnector
+    private val systemServicesContainer: SystemServicesContainer
 ) {
 
     private var albumArtBitmap: Bitmap? = null
@@ -95,7 +95,7 @@ class MediaUtils @Inject constructor(
     fun setAlbumArtFromController(controller: MediaController?) {
         albumArtBitmap = controller?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: controller?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
-                    ?: notificationListenerConnector.notificationListener?.getMediaNotificationByPackageName(
+                    ?: systemServicesContainer.notificationListener?.getMediaNotificationByPackageName(
                 controller?.packageName
             )
     }
