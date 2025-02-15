@@ -8,15 +8,34 @@ import android.os.Process
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.riskycase.jarvisEnhanced.datastore.settingsDataStore
 import com.riskycase.jarvisEnhanced.service.NotificationListener
+import com.riskycase.jarvisEnhanced.util.wallpaper.NasaApodFetchWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val applicationContext: Context
 ) : ViewModel() {
+
+    var currentNasaApiKey = MutableStateFlow("")
+
+    init {
+        applicationContext.settingsDataStore.data.map { it.nasaApodApiKey }
+            .onEach { currentNasaApiKey.value = it }.launchIn(viewModelScope)
+    }
 
     fun getNotificationListenerServiceEnabled(): Boolean {
         return NotificationManagerCompat.getEnabledListenerPackages(applicationContext)
@@ -54,6 +73,34 @@ class SettingsViewModel @Inject constructor(
         val notificationListenerIntent =
             Intent(applicationContext, NotificationListener::class.java)
         applicationContext.startService(notificationListenerIntent)
+    }
+
+    fun setCurrentNasaApiKey(key: String) {
+        currentNasaApiKey.update { key }
+    }
+
+    fun resetCurrentNasaApiKey() {
+        viewModelScope.launch {
+            currentNasaApiKey.update {
+                applicationContext.settingsDataStore.data.map { data -> data.nasaApodApiKey }
+                    .first()
+            }
+        }
+    }
+
+    fun saveCurrentNasaApiKey() {
+        viewModelScope.launch {
+            applicationContext.settingsDataStore.updateData {
+                it.toBuilder()
+                    .setNasaApodApiKey(currentNasaApiKey.value)
+                    .build()
+            }
+        }
+    }
+
+    fun refreshApod() {
+        val nasaApodFetchRequest = OneTimeWorkRequestBuilder<NasaApodFetchWorker>().build()
+        WorkManager.getInstance(applicationContext).enqueue(nasaApodFetchRequest)
     }
 
 }

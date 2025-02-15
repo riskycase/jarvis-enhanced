@@ -6,4 +6,5 @@ option java_multiple_files = true;
 message SettingsDataStore {
   optional int32 check_duration_milliseconds = 1;
   optional bool clear_notification_on_click = 2;
+  optional string nasa_apod_api_key = 3;
 }

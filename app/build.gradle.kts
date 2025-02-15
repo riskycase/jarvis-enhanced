@@ -1,4 +1,3 @@
-import com.google.protobuf.gradle.*
 import org.jetbrains.kotlin.config.JvmTarget
 
 val protobufVersion = "3.18.0"
@@ -10,6 +9,7 @@ plugins {
     id("com.google.protobuf") version "0.9.4"
     id("kotlin-kapt")
     id("com.google.dagger.hilt.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -18,7 +18,7 @@ android {
 
     defaultConfig {
         applicationId = "com.riskycase.jarvisEnhanced"
-        minSdk = 30
+        minSdk = 31
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -33,8 +33,7 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             )
         }
     }
@@ -71,6 +70,13 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.work:work-runtime-ktx:2.8.1")
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("androidx.hilt:hilt-work:1.2.0")
+    kapt("androidx.hilt:hilt-compiler:1.2.0")
 
     val room_version = "2.5.2"
 
@@ -89,6 +95,8 @@ dependencies {
     implementation("com.google.dagger:hilt-android:2.51.1")
     implementation("androidx.hilt:hilt-navigation-fragment:1.2.0")
     kapt("com.google.dagger:hilt-android-compiler:2.51.1")
+
+    implementation("androidx.palette:palette-ktx:1.0.0")
 
     implementation("com.google.accompanist:accompanist-systemuicontroller:0.27.0")
 
@@ -111,7 +119,7 @@ protobuf {
     }
     generateProtoTasks {
         all().forEach { task ->
-            task.plugins{
+            task.plugins {
                 create("java") {
                     option("lite")
                 }

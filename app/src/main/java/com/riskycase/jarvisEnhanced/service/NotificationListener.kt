@@ -7,17 +7,21 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.database.sqlite.SQLiteConstraintException
+import android.graphics.Bitmap
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.graphics.drawable.toBitmap
 import com.riskycase.jarvisEnhanced.R
 import com.riskycase.jarvisEnhanced.datastore.settingsDataStore
 import com.riskycase.jarvisEnhanced.models.Filter
@@ -25,6 +29,7 @@ import com.riskycase.jarvisEnhanced.models.Snap
 import com.riskycase.jarvisEnhanced.repository.FilterRepository
 import com.riskycase.jarvisEnhanced.repository.SnapRepository
 import com.riskycase.jarvisEnhanced.util.Constants
+import com.riskycase.jarvisEnhanced.util.SystemServicesContainer
 import com.riskycase.jarvisEnhanced.util.NotificationMaker
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -37,6 +42,7 @@ import javax.inject.Inject
 class NotificationListener @Inject constructor() : NotificationListenerService() {
 
     private lateinit var filters: List<Filter>
+    private var componentName: ComponentName? = null
 
     @Inject
     lateinit var filterRepository: FilterRepository
@@ -46,6 +52,9 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
 
     @Inject
     lateinit var notificationMaker: NotificationMaker
+
+    @Inject
+    lateinit var systemServicesContainer: SystemServicesContainer
 
     @Inject
     @ApplicationContext
@@ -115,6 +124,20 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
         return sender
     }
 
+    private fun toggleNotificationListenerService(componentName: ComponentName) {
+        val pm = packageManager
+        pm.setComponentEnabledSetting(
+            componentName,
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+            PackageManager.DONT_KILL_APP
+        )
+        pm.setComponentEnabledSetting(
+            componentName,
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+            PackageManager.DONT_KILL_APP
+        )
+    }
+
     private fun goForeground() {
         startForeground(
             Constants.MONITOR_FOREGROUND_NOTIFICATION_ID,
@@ -138,15 +161,28 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
                     if (sender.isNullOrBlank()) return@map null
                     cancelNotification(it.key)
                     return@map Snap(it.key.plus("|").plus(it.postTime), sender, it.postTime)
-                }.filterNotNull().forEach(snapRepository::add)
+                }.filterNotNull().forEach {
+                    try {
+                        snapRepository.add(it)
+                    } catch (_: SQLiteConstraintException) {
+                    }
+                }
             notificationMaker.makeNotification()
         }.start()
 
     }
 
+    fun getMediaNotificationByPackageName(packageName: String?): Bitmap? {
+        return activeNotifications.filter { it.notification.extras.containsKey(Notification.EXTRA_MEDIA_SESSION) }
+            .firstOrNull { it.packageName == packageName }?.notification?.let {
+                it.getLargeIcon() ?: it.smallIcon
+            }?.loadDrawable(applicationContext)?.toBitmap()
+    }
+
     override fun onBind(intent: Intent?): IBinder? {
         notificationMaker.makeNotification()
         filterRepository.allFiltersLive.observeForever { filters -> this.filters = filters }
+        systemServicesContainer.notificationListener  = this
         return super.onBind(intent)
     }
 
@@ -192,7 +228,11 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
             if (!sender.isNullOrBlank()) {
                 val snap = Snap(sbn.key.plus("|").plus(sbn.postTime), sender, sbn.postTime)
                 Thread {
-                    snapRepository.add(snap)
+                    try {
+                        snapRepository.add(snap)
+                    } catch (e: SQLiteConstraintException) {
+                        // Nothing to do here, Snapchat is being a bitch
+                    }
                     super.cancelNotification(sbn.key)
                     notificationMaker.makeNotification()
                 }.start()
@@ -202,6 +242,14 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         readPendingSnaps()
-        return super.onStartCommand(intent, flags, startId)
+        if (componentName == null) {
+            componentName = ComponentName(this, this::class.java)
+        }
+
+        componentName?.let {
+            requestRebind(it)
+            toggleNotificationListenerService(it)
+        }
+        return START_REDELIVER_INTENT
     }
 }
