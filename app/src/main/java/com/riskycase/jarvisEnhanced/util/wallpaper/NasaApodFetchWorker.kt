@@ -34,6 +34,12 @@ class NasaApodFetchWorker @AssistedInject constructor(
             applicationContext.openFileOutput("wallpaper", Context.MODE_PRIVATE).use {
                 it.write(nasaApi.downloadImage(imageData.hdUrl ?: imageData.url).bytes())
             }
+            applicationContext.openFileOutput("wallpaper_small", Context.MODE_PRIVATE).use {
+                it.write(nasaApi.downloadImage(imageData.url).bytes())
+            }
+            applicationContext.openFileInput("wallpaper_small").use {
+                backgroundImageUtils.setSmallBackgroundImage(BitmapFactory.decodeStream(it))
+            }
             applicationContext.openFileInput("wallpaper").use {
                 backgroundImageUtils.setBackgroundImage(BitmapFactory.decodeStream(it))
                 systemServicesContainer.wallpaperEngine?.notifyColorsChanged()

@@ -11,6 +11,7 @@ import javax.inject.Singleton
 class BackgroundImageUtils @Inject constructor(){
 
     private var backgroundImage: Bitmap? = null
+    private var smallBackgroundImage: Bitmap? = null
 
     private var baseColor = Color.WHITE
     private var darkBaseColor = Color.GRAY
@@ -36,7 +37,17 @@ class BackgroundImageUtils @Inject constructor(){
             colorOnBaseColor =
                 if (ColorUtils.calculateLuminance(baseColor) > 0.5f) Color.BLACK else Color.WHITE
         }
+        backgroundImage?.recycle()
         backgroundImage = newImage
+    }
+
+    fun getSmallBackgroundImage(): Bitmap? {
+        return smallBackgroundImage
+    }
+
+    fun setSmallBackgroundImage(newImage: Bitmap?) {
+        smallBackgroundImage?.recycle()
+        smallBackgroundImage = newImage
     }
 
     fun getBaseColor(): Int {

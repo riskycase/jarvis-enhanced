@@ -142,7 +142,13 @@ class WallpaperService : WallpaperService() {
                     backgroundImageUtils.getBackgroundImage()?.also { backgroundImage ->
                         canvas.save()
                         canvas.translate(if (!isPreview) width * xOffset else 0f, 0f)
-                        drawImageCover(canvas, backgroundImage, width, height)
+                        try {
+                            drawImageCover(canvas, backgroundImage, width, height)
+                        } catch (exception: RuntimeException) {
+                            backgroundImageUtils.getSmallBackgroundImage()?.also { smallBackgroundImage ->
+                                drawImageCover(canvas, smallBackgroundImage, width, height)
+                            }
+                        }
                         canvas.restore()
                     }
                     if (backgroundImageUtils.getBackgroundImage() == null) {
