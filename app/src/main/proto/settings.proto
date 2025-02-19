@@ -8,3 +8,9 @@ message SettingsDataStore {
   optional bool clear_notification_on_click = 2;
   optional string nasa_apod_api_key = 3;
 }
+
+message SocketSettings {
+  optional string server_url = 1;
+  optional string device_id = 2;
+  optional string device_secret = 3;
+}

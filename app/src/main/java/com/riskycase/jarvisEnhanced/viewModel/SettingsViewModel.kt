@@ -12,7 +12,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.riskycase.jarvisEnhanced.datastore.settingsDataStore
+import com.riskycase.jarvisEnhanced.datastore.socketSettings
 import com.riskycase.jarvisEnhanced.service.NotificationListener
+import com.riskycase.jarvisEnhanced.util.SocketIOTransport
 import com.riskycase.jarvisEnhanced.util.wallpaper.NasaApodFetchWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -30,11 +32,23 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val applicationContext: Context
 ) : ViewModel() {
 
+    @Inject
+    lateinit var socketIOTransport: SocketIOTransport
+
     var currentNasaApiKey = MutableStateFlow("")
+
+    var currentSocketServerUrl = MutableStateFlow("")
+    var currentDeviceId = MutableStateFlow("")
+    var currentDeviceSecret = MutableStateFlow("")
 
     init {
         applicationContext.settingsDataStore.data.map { it.nasaApodApiKey }
             .onEach { currentNasaApiKey.value = it }.launchIn(viewModelScope)
+        applicationContext.socketSettings.data.map {
+            currentSocketServerUrl.value = it.serverUrl
+            currentDeviceId.value = it.deviceId
+            currentDeviceSecret.value = it.deviceSecret
+        }.launchIn(viewModelScope)
     }
 
     fun getNotificationListenerServiceEnabled(): Boolean {
@@ -101,6 +115,39 @@ class SettingsViewModel @Inject constructor(
     fun refreshApod() {
         val nasaApodFetchRequest = OneTimeWorkRequestBuilder<NasaApodFetchWorker>().build()
         WorkManager.getInstance(applicationContext).enqueue(nasaApodFetchRequest)
+    }
+
+    fun setSocketServerUrl(url: String) {
+        currentSocketServerUrl.value = url
+    }
+
+    fun setDeviceId(deviceId: String) {
+        currentDeviceId.value = deviceId
+    }
+
+    fun setDeviceSecret(secret: String) {
+        currentDeviceSecret.value = secret
+    }
+
+    fun resetCurrentSocketIOSettings() {
+        applicationContext.socketSettings.data.map {
+            currentSocketServerUrl.value = it.serverUrl
+            currentDeviceId.value = it.deviceId
+            currentDeviceSecret.value = it.deviceSecret
+        }.launchIn(viewModelScope)
+    }
+
+    fun saveCurrentSocketIOSettings() {
+        viewModelScope.launch{
+            applicationContext.socketSettings.updateData {
+                it.toBuilder()
+                    .setServerUrl(currentSocketServerUrl.value)
+                    .setDeviceId(currentDeviceId.value)
+                    .setDeviceSecret(currentDeviceSecret.value)
+                    .build()
+            }
+            socketIOTransport.resetSocket()
+        }
     }
 
 }

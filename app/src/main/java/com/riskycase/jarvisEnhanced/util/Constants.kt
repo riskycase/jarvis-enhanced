@@ -16,3 +16,12 @@ object Destinations {
     const val EDIT_FILTER = "editFilter"
     const val SETTINGS = "settings"
 }
+
+object SocketIOConstants {
+    const val DEVICE_ID = "deviceId"
+    const val DEVICE_SECRET = "secret"
+    const val AUTH_TOKEN = "authToken"
+    class AuthTokenBody {
+        lateinit var authToken: String
+    }
+}
