@@ -31,6 +31,7 @@ import com.riskycase.jarvisEnhanced.repository.SnapRepository
 import com.riskycase.jarvisEnhanced.util.Constants
 import com.riskycase.jarvisEnhanced.util.SystemServicesContainer
 import com.riskycase.jarvisEnhanced.util.NotificationMaker
+import com.riskycase.jarvisEnhanced.util.wallpaper.MediaUtils
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -55,6 +56,9 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
 
     @Inject
     lateinit var systemServicesContainer: SystemServicesContainer
+
+    @Inject
+    lateinit var mediaUtils: MediaUtils
 
     @Inject
     @ApplicationContext
@@ -181,6 +185,7 @@ class NotificationListener @Inject constructor() : NotificationListenerService()
 
     override fun onBind(intent: Intent?): IBinder? {
         notificationMaker.makeNotification()
+        mediaUtils.setup()
         filterRepository.allFiltersLive.observeForever { filters -> this.filters = filters }
         systemServicesContainer.notificationListener  = this
         return super.onBind(intent)

@@ -3,9 +3,11 @@ package com.riskycase.jarvisEnhanced.dagger
 import android.app.KeyguardManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
 import android.icu.text.SimpleDateFormat
 import android.media.session.MediaSessionManager
 import android.os.BatteryManager
+import com.google.gson.Gson
 import com.riskycase.jarvisEnhanced.service.NotificationListener
 import dagger.Module
 import dagger.Provides
@@ -36,6 +38,18 @@ class Provider {
     @Singleton
     fun providesMediaSessionManager(@ApplicationContext context: Context): MediaSessionManager {
         return (context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager)
+    }
+
+    @Provides
+    @Singleton
+    fun providesPackageManager(@ApplicationContext context: Context): PackageManager {
+        return context.packageManager
+    }
+
+    @Provides
+    @Singleton
+    fun providesGson() : Gson {
+        return Gson()
     }
 
     @Provides

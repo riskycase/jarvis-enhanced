@@ -3,6 +3,7 @@ package com.riskycase.jarvisEnhanced.util.wallpaper
 import android.app.KeyguardManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -14,9 +15,25 @@ import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.util.Base64
+import androidx.core.app.NotificationManagerCompat
+import com.google.gson.Gson
 import com.riskycase.jarvisEnhanced.R
+import com.riskycase.jarvisEnhanced.util.SocketChannels.MUSIC_ALBUM_ART_DETAILS
+import com.riskycase.jarvisEnhanced.util.SocketChannels.MUSIC_DETAILS
+import com.riskycase.jarvisEnhanced.util.SocketChannels.MusicCommands.NEXT
+import com.riskycase.jarvisEnhanced.util.SocketChannels.MusicCommands.PAUSE
+import com.riskycase.jarvisEnhanced.util.SocketChannels.MusicCommands.PLAY
+import com.riskycase.jarvisEnhanced.util.SocketChannels.MusicCommands.PREVIOUS
+import com.riskycase.jarvisEnhanced.util.SocketChannels.MusicCommands.SEEK_TO
+import com.riskycase.jarvisEnhanced.util.SocketChannels.MusicDetails
+import com.riskycase.jarvisEnhanced.util.SocketIOTransport
 import com.riskycase.jarvisEnhanced.util.SystemServicesContainer
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.ByteArrayOutputStream
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -25,31 +42,38 @@ import kotlin.math.roundToInt
 
 @Singleton
 class MediaUtils @Inject constructor(
-    mediaSessionManager: MediaSessionManager,
-    @ApplicationContext applicationContext: Context,
+    private val mediaSessionManager: MediaSessionManager,
+    private val packageManager: PackageManager,
+    @ApplicationContext private val applicationContext: Context,
     @Named("NotificationListenerServiceComponentName") private val notificationListenerServiceComponentName: ComponentName,
-    private val systemServicesContainer: SystemServicesContainer
+    private val systemServicesContainer: SystemServicesContainer,
+    private val socketIOTransport: SocketIOTransport,
+    private val gson: Gson
 ) {
+
+    val handler = Handler(Looper.getMainLooper())
+
+    private val musicDetailsMap: MutableMap<String, String> = HashMap()
 
     private var albumArtBitmap: Bitmap? = null
         set(value) {
             // Recycle the old bitmap
-            field?.recycle()
+            if (value?.isRecycled == false) {
+                field?.recycle()
 
-            value?.let { newBitmap ->
-                val width = newBitmap.width
-                val height = newBitmap.height
-                val smaller = minOf(width, height)
-                field = Bitmap.createBitmap(
-                    newBitmap, (width - smaller) / 2, (height - smaller) / 2, smaller, smaller
-                )
+                value.let { newBitmap ->
+                    val width = newBitmap.width
+                    val height = newBitmap.height
+                    val smaller = minOf(width, height)
+                    field = Bitmap.createBitmap(
+                        newBitmap, (width - smaller) / 2, (height - smaller) / 2, smaller, smaller
+                    )
 
-                // If the new bitmap was cropped, recycle the original
-                if (field != newBitmap) {
-                    newBitmap.recycle()
+                    // If the new bitmap was cropped, recycle the original
+                    if (field != newBitmap) {
+                        newBitmap.recycle()
+                    }
                 }
-            } ?: run {
-                field = null
             }
         }
 
@@ -75,6 +99,17 @@ class MediaUtils @Inject constructor(
     lateinit var keyguardManager: KeyguardManager
 
     init {
+        if (hasPermissions()) {
+            setup()
+        }
+    }
+
+    private fun hasPermissions() : Boolean {
+        return NotificationManagerCompat.getEnabledListenerPackages(applicationContext)
+            .contains(applicationContext.packageName)
+    }
+
+    fun setup() {
         mediaSessionManager.addOnActiveSessionsChangedListener(
             this::controllersUtilityFunction, notificationListenerServiceComponentName
         )
@@ -89,13 +124,32 @@ class MediaUtils @Inject constructor(
         activeController =
             controllers?.find { controller -> controller.playbackState?.isActive == true }
         controllers?.forEach(this::registerCallbacksOnController)
+        controllers?.forEach(this::setDetailsFromController)
+        socketIOTransport.sendMessage(MUSIC_DETAILS, musicDetailsMap)
         setAlbumArtFromController(activeController)
     }
 
     fun setAlbumArtFromController(controller: MediaController?) {
-        albumArtBitmap = controller?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+        albumArtBitmap = getAlbumArtFromController(controller)
+    }
+
+    fun handleSocketCommand(parts: List<String>) {
+        mediaSessionManager.getActiveSessions(notificationListenerServiceComponentName)
+            .first { controller -> controller.packageName == parts[2] }.let {
+                when (parts[3]) {
+                    PREVIOUS -> it.transportControls.skipToPrevious()
+                    PAUSE -> it.transportControls.pause()
+                    PLAY -> it.transportControls.play()
+                    NEXT -> it.transportControls.skipToNext()
+                    SEEK_TO -> it.transportControls.seekTo(parts[4].toLong())
+                }
+            }
+    }
+
+    private fun getAlbumArtFromController(controller: MediaController?): Bitmap? {
+        return controller?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: controller?.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
-                    ?: systemServicesContainer.notificationListener?.getMediaNotificationByPackageName(
+            ?: systemServicesContainer.notificationListener?.getMediaNotificationByPackageName(
                 controller?.packageName
             )
     }
@@ -106,24 +160,99 @@ class MediaUtils @Inject constructor(
                 override fun onSessionDestroyed() {
                     super.onSessionDestroyed()
                     controllerCallbackMap.remove(controller.packageName)
+                    musicDetailsMap.remove(controller.packageName)
+                    socketIOTransport.sendMessage(MUSIC_DETAILS, musicDetailsMap)
                     if (activeController == controller) activeController = null
                 }
 
                 override fun onPlaybackStateChanged(state: PlaybackState?) {
                     super.onPlaybackStateChanged(state)
                     if (state?.isActive == true) activeController = controller
+                    updatePlaybackState(controller)
+                    socketIOTransport.sendMessage(MUSIC_DETAILS, musicDetailsMap)
                     setAlbumArtFromController(activeController)
                 }
 
                 override fun onMetadataChanged(metadata: MediaMetadata?) {
                     super.onMetadataChanged(metadata)
+                    setDetailsFromController(controller)
+                    socketIOTransport.sendMessage(MUSIC_DETAILS, musicDetailsMap)
                     if (activeController == controller) {
                         setAlbumArtFromController(controller)
                     }
+                    handler.postDelayed({
+                        val bitmap = getAlbumArtFromController(controller)
+                        val byteArrayOutputStream = ByteArrayOutputStream()
+                        bitmap?.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
+                            .also {
+                                socketIOTransport.sendMessage(
+                                    MUSIC_ALBUM_ART_DETAILS, mapOf(
+                                        Pair(
+                                            controller.packageName, Base64.encodeToString(
+                                                byteArrayOutputStream.toByteArray(), Base64.NO_WRAP
+                                            )
+                                        )
+                                    )
+                                )
+                            }
+                    }, 450) // Needed to give Poweramp space to update art
                 }
             }
             controllerCallbackMap[controller.packageName] = callback
             controller.registerCallback(callback)
+        }
+    }
+
+    private fun updatePlaybackState(controller: MediaController) {
+        val map = gson.fromJson<HashMap<String, String>>(
+            musicDetailsMap[controller.packageName], HashMap::class.java
+        )
+        map[MusicDetails.MUSIC_UPDATED_AT] =
+            controller.playbackState?.lastPositionUpdateTime?.plus((System.currentTimeMillis() - SystemClock.elapsedRealtime()))
+                .toString()
+        map[MusicDetails.MUSIC_PLAYING_STATE] = controller.playbackState?.state.toString()
+        map[MusicDetails.MUSIC_POSITION] = controller.playbackState?.position.toString()
+        musicDetailsMap[controller.packageName] = gson.toJson(map)
+    }
+
+    private fun setDetailsFromController(controller: MediaController) {
+        musicDetailsMap[controller.packageName] = gson.toJson(
+            mapOf(
+                Pair(
+                    MusicDetails.MUSIC_PLAYING_STATE, controller.playbackState?.state
+                ), Pair(
+                    MusicDetails.MUSIC_TITLE,
+                    controller.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
+                ), Pair(
+                    MusicDetails.MUSIC_ALBUM,
+                    controller.metadata?.getString(MediaMetadata.METADATA_KEY_ALBUM)
+                ), Pair(
+                    MusicDetails.MUSIC_ARTIST,
+                    controller.metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)
+                ), Pair(
+                    MusicDetails.MUSIC_DURATION,
+                    controller.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)
+                ), Pair(
+                    MusicDetails.MUSIC_POSITION, controller.playbackState?.position
+                ), Pair(
+                    MusicDetails.MUSIC_UPDATED_AT,
+                    controller.playbackState?.lastPositionUpdateTime?.plus((System.currentTimeMillis() - SystemClock.elapsedRealtime()))
+                ), Pair(
+                    MusicDetails.MUSIC_PLAYER_NAME, packageManager.getApplicationInfo(
+                        controller.packageName, PackageManager.MATCH_ALL
+                    ).loadLabel(packageManager)
+                )
+            )
+        )
+    }
+
+    fun sendFullUpdate() {
+        if (hasPermissions()){
+            mediaSessionManager.getActiveSessions(notificationListenerServiceComponentName)
+                .forEach {
+                    setDetailsFromController(it)
+                }
+            socketIOTransport.sendMessage(MUSIC_DETAILS, musicDetailsMap)
         }
     }
 

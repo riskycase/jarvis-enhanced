@@ -1,10 +1,13 @@
 package com.riskycase.jarvisEnhanced.util
 
 import android.content.Context
-import android.os.BatteryManager
+import android.content.Intent
+import android.os.Bundle
+import android.util.Log
 import com.google.gson.Gson
 import com.riskycase.jarvisEnhanced.datastore.socketSettings
 import com.riskycase.jarvisEnhanced.util.SocketIOConstants.AUTH_TOKEN
+import com.riskycase.jarvisEnhanced.util.SocketIOConstants.COMMAND
 import com.riskycase.jarvisEnhanced.util.SocketIOConstants.DEVICE_ID
 import com.riskycase.jarvisEnhanced.util.SocketIOConstants.DEVICE_SECRET
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -13,19 +16,21 @@ import io.socket.client.Socket
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import java.net.URI
-import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
+import javax.inject.Singleton
 
-class SocketIOTransport @Inject constructor(@ApplicationContext val applicationContext: Context) {
+@Singleton
+class SocketIOTransport @Inject constructor(
+    @ApplicationContext val applicationContext: Context,
+    private val gson: Gson
+) {
 
     private var socket: Socket? = null
     private var authToken: String? = null
     private var socketAuthenticated = false
 
-    private val messageList = HashMap<String, Map<String, String>>()
-    private var messageLock = ReentrantLock(true)
-
-    private val gson: Gson = Gson()
+    private val messageList = ConcurrentHashMap<String, Map<String, String>>()
 
     init {
         resetSocket()
@@ -36,12 +41,12 @@ class SocketIOTransport @Inject constructor(@ApplicationContext val applicationC
         socketAuthenticated = false
         runBlocking {
             val settings = applicationContext.socketSettings.data.first()
-            val uri = URI.create(settings.serverUrl)
+            val uri = URI.create(if(settings.hasServerUrl()) settings.serverUrl else "http://localhost")
             val options = IO.Options.builder().setAuth(
                 mapOf(
                     Pair(DEVICE_ID, settings.deviceId), Pair(DEVICE_SECRET, settings.deviceSecret)
                 )
-            ).setReconnection(true).build()
+            ).setReconnection(true).setReconnectionAttempts(Int.MAX_VALUE).build()
             socket = IO.socket(uri, options)
             socket?.onAnyIncoming { messages ->
                 if (AUTH_TOKEN == messages[0]) {
@@ -49,14 +54,17 @@ class SocketIOTransport @Inject constructor(@ApplicationContext val applicationC
                         messages[1].toString(), SocketIOConstants.AuthTokenBody::class.java
                     ).authToken
                     socketAuthenticated = true
-
-                    synchronized(messageLock, {
-                        messageList.entries.forEach { entry ->
-                            publishMessageOnChannel(
-                                entry.key, entry.value
-                            )
-                        }
-                    })
+                    messageList.entries.forEach { entry ->
+                        publishMessageOnChannel(
+                            entry.key, entry.value
+                        )
+                    }
+                } else if (COMMAND == messages[0]) {
+                    Log.i("SocketTransport", "Received command ${messages[1]}")
+                    val startIntent = Intent("com.riskycase.jarvisEnhanced.command")
+                    startIntent.putExtra("command", messages[1].toString())
+                    startIntent.setPackage(applicationContext.packageName)
+                    applicationContext.sendBroadcast(startIntent)
                 }
             }
             socket?.connect()
@@ -75,9 +83,7 @@ class SocketIOTransport @Inject constructor(@ApplicationContext val applicationC
     }
 
     fun sendMessage(channel: String, message: Map<String, String>) {
-        synchronized(messageLock, {
-            messageList[channel] = message
-            publishMessageOnChannel(channel, message)
-        })
+        messageList[channel] = message
+        publishMessageOnChannel(channel, message)
     }
 }
