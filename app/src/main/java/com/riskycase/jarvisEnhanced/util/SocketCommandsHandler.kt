@@ -3,9 +3,6 @@ package com.riskycase.jarvisEnhanced.util
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Bundle
-import android.util.Log
-import androidx.activity.ComponentActivity
 import com.riskycase.jarvisEnhanced.util.SocketIOConstants.CommandCategories.MUSIC
 import com.riskycase.jarvisEnhanced.util.wallpaper.MediaUtils
 import dagger.hilt.android.AndroidEntryPoint

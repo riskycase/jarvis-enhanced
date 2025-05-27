@@ -146,7 +146,6 @@ class ClockUtils @Inject constructor(
                 ClockRadiusStates.KEYGUARD_LOCKED -> clockRadiusAnimator.forceValue(
                     lockedVisibleRadius
                 )
-
                 else -> {
                     clockRadiusAnimator.setAnimation(
                         System.currentTimeMillis(),
@@ -155,6 +154,9 @@ class ClockUtils @Inject constructor(
                         unlockedVisibleRadius
                     )
                     val finalCalendar = Calendar.getInstance()
+                    val hourRotation = getHandRotations(finalCalendar, Calendar.HOUR)
+                    val minuteRotation = getHandRotations(finalCalendar, Calendar.MINUTE)
+                    val secondRotation = getHandRotations(finalCalendar, Calendar.SECOND)
                     finalCalendar.add(
                         Calendar.MILLISECOND,
                         (lockUnlockAnimationDuration + clockSweepAnimationDuration).toInt()
@@ -162,20 +164,20 @@ class ClockUtils @Inject constructor(
                     hourHandRotationAnimator.setAnimation(
                         System.currentTimeMillis() + lockUnlockAnimationDuration,
                         clockSweepAnimationDuration,
-                        0f,
-                        getHandRotations(finalCalendar, Calendar.HOUR)
+                        if (hourRotation > 180f) 0f else 360f,
+                        hourRotation
                     )
                     minuteHandRotationAnimator.setAnimation(
                         System.currentTimeMillis() + lockUnlockAnimationDuration,
                         clockSweepAnimationDuration,
-                        0f,
-                        getHandRotations(finalCalendar, Calendar.MINUTE)
+                        if (minuteRotation > 180f) 0f else 360f,
+                        minuteRotation
                     )
                     secondHandRotationAnimator.setAnimation(
                         System.currentTimeMillis() + lockUnlockAnimationDuration,
                         clockSweepAnimationDuration,
-                        0f,
-                        getHandRotations(finalCalendar, Calendar.SECOND)
+                        if (secondRotation > 180f) 0f else 360f,
+                        secondRotation
                     )
                 }
             }
@@ -183,7 +185,7 @@ class ClockUtils @Inject constructor(
         }
     }
 
-    fun getClockCenter(): PointF {
+    private fun getClockCenter(): PointF {
         val currentCenterState =
             if (keyguardManager.isKeyguardLocked) ClockCenterStates.KEYGUARD_LOCKED else ClockCenterStates.KEYGUARD_UNLOCKED
         if (currentCenterState != previousCenterState) {
@@ -202,7 +204,7 @@ class ClockUtils @Inject constructor(
         return clockCenterAnimator.getValue(System.currentTimeMillis())
     }
 
-    fun getClockRadius(): Float {
+    private fun getClockRadius(): Float {
         val currentVisibleState =
             if (keyguardManager.isKeyguardLocked) ClockRadiusStates.KEYGUARD_LOCKED else ClockRadiusStates.KEYGUARD_UNLOCKED
         if (currentVisibleState != previousVisibleState) {
@@ -221,7 +223,7 @@ class ClockUtils @Inject constructor(
         )
     }
 
-    fun getRotation(value: Int): Float {
+    private fun getRotation(value: Int): Float {
         val calendar = Calendar.getInstance()
         val finalRotation = when (value) {
             Calendar.HOUR -> ((calendar.get(Calendar.HOUR)
