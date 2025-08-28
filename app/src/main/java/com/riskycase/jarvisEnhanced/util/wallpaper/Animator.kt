@@ -26,6 +26,16 @@ abstract class Animator<T : Comparable<T>, V : Any>(initialT: T, initialV: V) {
         this.endValue = value
     }
 
+    protected fun scaleValue(
+        startValue: Float,
+        endValue: Float,
+        startTime: Long,
+        currentTime: Long,
+        endTime: Long
+    ): Float {
+        return startValue + ((endValue - startValue) * bezierEasing.transform((currentTime - startTime).toFloat() / (endTime - startTime).toFloat()))
+    }
+
     abstract fun getValue(time: Long): V
 
     abstract fun getValue(time: Long, fallbackV: V): V
@@ -41,7 +51,7 @@ class AnimatorFloat<T : Comparable<T>>(initialT: T, initialFloat: Float) :
     override fun getValue(time: Long, fallbackV: Float): Float {
         return if (time < this.startTime) startValue
         else if (time > this.endTime) fallbackV
-        else startValue + ((endValue - startValue) * bezierEasing.transform((time - startTime).toFloat() / (endTime - startTime).toFloat()))
+        else scaleValue(startValue, endValue, startTime, time, endTime)
     }
 }
 
@@ -55,8 +65,8 @@ class AnimatorPointF<T : Comparable<T>>(initialT: T, initialPointF: PointF) :
         return if (time < this.startTime) startValue
         else if (time > this.endTime) fallbackV
         else PointF(
-            startValue.x + ((endValue.x - startValue.x) * bezierEasing.transform((time - startTime).toFloat() / (endTime - startTime).toFloat())),
-            startValue.y + ((endValue.y - startValue.y) * bezierEasing.transform((time - startTime).toFloat() / (endTime - startTime).toFloat()))
+            scaleValue(startValue.x, endValue.x, startTime, time, endTime),
+            scaleValue(startValue.y, endValue.y, startTime, time, endTime),
         )
     }
 }

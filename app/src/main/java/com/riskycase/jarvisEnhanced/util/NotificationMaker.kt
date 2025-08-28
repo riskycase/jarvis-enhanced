@@ -9,6 +9,7 @@ import androidx.core.app.NotificationCompat
 import com.riskycase.jarvisEnhanced.R
 import com.riskycase.jarvisEnhanced.repository.SnapRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.util.Optional
 import javax.inject.Inject
 
 class NotificationMaker @Inject constructor(
@@ -63,15 +64,18 @@ class NotificationMaker @Inject constructor(
                     ).setStyle(NotificationCompat.BigTextStyle().bigText("from ".plus(sendersText)))
                     .setContentText("last received from ${snaps[0].sender}").setNumber(senders.size)
                     .setPriority(NotificationManager.IMPORTANCE_DEFAULT).setWhen(snaps[0].sent)
-                    .setAutoCancel(true).setContentIntent(
+                    .setAutoCancel(true).setChannelId("messages").setGroup(Constants.SNAP_NOTIFICATION_ID)
+                    .setGroupSummary(true)
+                    .setContentIntent(
                         PendingIntent.getActivity(
                             context,
                             0,
-                            context.packageManager.getLaunchIntentForPackage(Constants.SNAPCHAT_PACKAGE_NAME),
+                            Optional
+                                .ofNullable(context.packageManager.getLaunchIntentForPackage(Constants.SNAPCHAT_PACKAGE_NAME))
+                                .orElse(context.packageManager.getLaunchIntentForPackage(context.packageName)),
                             PendingIntent.FLAG_IMMUTABLE
                         )
-                    ).setChannelId("messages").setGroup(Constants.SNAP_NOTIFICATION_ID)
-                    .setGroupSummary(true)
+                    )
 
                 notificationManager.notify(Constants.SNAP_NOTIFICATION_ID, 1, builder.build())
             }

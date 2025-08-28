@@ -38,7 +38,7 @@
             android:theme="@style/Theme.Jarvis" />
 
         <service
-            android:name=".service.WallpaperService"
+            android:name=".wallpaper.WallpaperService"
             android:enabled="true"
             android:exported="true"
             android:permission="android.permission.BIND_WALLPAPER">

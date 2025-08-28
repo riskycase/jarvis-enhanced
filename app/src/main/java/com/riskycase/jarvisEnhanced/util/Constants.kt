@@ -15,6 +15,7 @@ object Destinations {
     const val FILTERS = "filters"
     const val EDIT_FILTER = "editFilter"
     const val SETTINGS = "settings"
+    const val WALLPAPER_PREVIEW = "wallpaperPreview"
 }
 
 object SocketIOConstants {

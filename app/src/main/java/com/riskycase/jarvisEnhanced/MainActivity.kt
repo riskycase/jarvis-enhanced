@@ -1,7 +1,6 @@
 package com.riskycase.jarvisEnhanced
 
 import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -30,16 +29,19 @@ import com.riskycase.jarvisEnhanced.ui.screen.AddFilterScreen
 import com.riskycase.jarvisEnhanced.ui.screen.FiltersScreen
 import com.riskycase.jarvisEnhanced.ui.screen.HomeScreen
 import com.riskycase.jarvisEnhanced.ui.screen.SettingsScreen
+import com.riskycase.jarvisEnhanced.ui.screen.WallpaperPreviewScreen
 import com.riskycase.jarvisEnhanced.ui.theme.JarvisTheme
 import com.riskycase.jarvisEnhanced.util.Destinations.EDIT_FILTER
 import com.riskycase.jarvisEnhanced.util.Destinations.FILTERS
 import com.riskycase.jarvisEnhanced.util.Destinations.HOME
 import com.riskycase.jarvisEnhanced.util.Destinations.SETTINGS
+import com.riskycase.jarvisEnhanced.util.Destinations.WALLPAPER_PREVIEW
 import com.riskycase.jarvisEnhanced.util.NotificationMaker
 import com.riskycase.jarvisEnhanced.viewModel.AddFilterViewModel
 import com.riskycase.jarvisEnhanced.viewModel.FilterViewModel
 import com.riskycase.jarvisEnhanced.viewModel.HomeViewModel
 import com.riskycase.jarvisEnhanced.viewModel.SettingsViewModel
+import com.riskycase.jarvisEnhanced.viewModel.WallpaperPreviewViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -67,6 +69,7 @@ class MainActivity : ComponentActivity() {
         val filterViewModel: FilterViewModel by viewModels()
         val addFilterViewModel: AddFilterViewModel by viewModels()
         val settingsViewModel: SettingsViewModel by viewModels()
+        val wallpaperPreviewViewModel: WallpaperPreviewViewModel by viewModels()
 
         setContent {
             val navController = rememberNavController()
@@ -82,6 +85,19 @@ class MainActivity : ComponentActivity() {
                             Text(
                                 getString(R.string.app_name), fontSize = 24.sp
                             )
+                            Divider()
+                            NavigationDrawerItem(label = {
+                                Text("Wallpaper preview")
+                            },
+                                selected = navController.currentBackStackEntry?.id == WALLPAPER_PREVIEW,
+                                onClick = {
+                                    if(navController.currentBackStackEntry?.id != WALLPAPER_PREVIEW) navController.navigate(
+                                        WALLPAPER_PREVIEW
+                                    )
+                                    scope.launch {
+                                        drawerState.close()
+                                    }
+                                })
                             Divider()
                             NavigationDrawerItem(label = {
                                 Text("Snap list")
@@ -160,6 +176,13 @@ class MainActivity : ComponentActivity() {
                         composable(SETTINGS) {
                             SettingsScreen(
                                 settingsViewModel = settingsViewModel,
+                                navController = navController,
+                                drawerState = drawerState
+                            )
+                        }
+                        composable(WALLPAPER_PREVIEW) {
+                            WallpaperPreviewScreen(
+                                wallpaperPreviewViewModel = wallpaperPreviewViewModel,
                                 navController = navController,
                                 drawerState = drawerState
                             )

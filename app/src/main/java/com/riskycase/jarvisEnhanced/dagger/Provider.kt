@@ -9,6 +9,11 @@ import android.media.session.MediaSessionManager
 import android.os.BatteryManager
 import com.google.gson.Gson
 import com.riskycase.jarvisEnhanced.service.NotificationListener
+import com.riskycase.jarvisEnhanced.wallpaper.WallpaperService
+import com.riskycase.jarvisEnhanced.util.SystemServicesContainer
+import com.riskycase.jarvisEnhanced.util.wallpaper.BackgroundImageUtils
+import com.riskycase.jarvisEnhanced.util.wallpaper.ClockUtils
+import com.riskycase.jarvisEnhanced.util.wallpaper.MediaUtils
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -78,6 +83,24 @@ class Provider {
     @Singleton
     fun providesAllOnString(): String {
         return "88:88:88"
+    }
+
+    @Provides
+    @Singleton
+    fun providesWallpaperService(
+        keyguardManager: KeyguardManager,
+        clockUtils: ClockUtils,
+        mediaUtils: MediaUtils,
+        backgroundImageUtils: BackgroundImageUtils,
+        systemServicesContainer: SystemServicesContainer
+    ): WallpaperService {
+        val wallpaperService = WallpaperService()
+        wallpaperService.keyguardManager = keyguardManager
+        wallpaperService.clockUtils = clockUtils
+        wallpaperService.mediaUtils = mediaUtils
+        wallpaperService.backgroundImageUtils = backgroundImageUtils
+        wallpaperService.systemServicesContainer = systemServicesContainer
+        return wallpaperService
     }
 
 }

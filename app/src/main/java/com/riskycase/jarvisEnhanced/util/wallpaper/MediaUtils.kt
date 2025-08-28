@@ -58,20 +58,20 @@ class MediaUtils @Inject constructor(
     private var albumArtBitmap: Bitmap? = null
         set(value) {
             // Recycle the old bitmap
-            if (value?.isRecycled == false) {
-                field?.recycle()
-
-                value.let { newBitmap ->
-                    val width = newBitmap.width
-                    val height = newBitmap.height
+            value?.let {
+                if (!value.isRecycled) {
+                    field?.recycle()
+                    val width = value.width
+                    val height = value.height
                     val smaller = minOf(width, height)
                     field = Bitmap.createBitmap(
-                        newBitmap, (width - smaller) / 2, (height - smaller) / 2, smaller, smaller
+                        value, (width - smaller) / 2, (height - smaller) / 2, smaller, smaller
                     )
 
                     // If the new bitmap was cropped, recycle the original
-                    if (field != newBitmap) {
-                        newBitmap.recycle()
+                    if (field != value) {
+                        value.recycle()
+
                     }
                 }
             }
@@ -104,7 +104,7 @@ class MediaUtils @Inject constructor(
         }
     }
 
-    private fun hasPermissions() : Boolean {
+    private fun hasPermissions(): Boolean {
         return NotificationManagerCompat.getEnabledListenerPackages(applicationContext)
             .contains(applicationContext.packageName)
     }
@@ -247,7 +247,7 @@ class MediaUtils @Inject constructor(
     }
 
     fun sendFullUpdate() {
-        if (hasPermissions()){
+        if (hasPermissions()) {
             mediaSessionManager.getActiveSessions(notificationListenerServiceComponentName)
                 .forEach {
                     setDetailsFromController(it)

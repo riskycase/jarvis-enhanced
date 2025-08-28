@@ -1,4 +1,4 @@
-package com.riskycase.jarvisEnhanced.service
+package com.riskycase.jarvisEnhanced.wallpaper
 
 import android.app.KeyguardManager
 import android.app.WallpaperColors
@@ -14,6 +14,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
+import androidx.core.graphics.withTranslation
 import com.riskycase.jarvisEnhanced.util.SystemServicesContainer
 import com.riskycase.jarvisEnhanced.util.wallpaper.BackgroundImageUtils
 import com.riskycase.jarvisEnhanced.util.wallpaper.ClockUtils
@@ -41,13 +42,17 @@ class WallpaperService : WallpaperService() {
     lateinit var systemServicesContainer: SystemServicesContainer
 
     override fun onCreateEngine(): Engine {
-        return MyWallpaperEngine()
+        return WallpaperEngine()
     }
 
-    inner class MyWallpaperEngine : Engine() {
+    inner class WallpaperEngine : Engine() {
 
         private val handler = Handler(Looper.myLooper()!!)
-        private val drawRunner = { draw() }
+        private val drawRunner = Runnable { draw() }
+
+        private var readyToDraw: Boolean = false
+
+        private var holder: SurfaceHolder? = null
 
         private var width: Int = 0
         private var height: Int = 0
@@ -73,15 +78,24 @@ class WallpaperService : WallpaperService() {
             }
         }
 
+        override fun onSurfaceCreated(holder: SurfaceHolder?) {
+            super.onSurfaceCreated(holder)
+            this.readyToDraw = true
+            this.holder = holder
+            onVisibilityChanged(visible)
+        }
+
         override fun onSurfaceDestroyed(holder: SurfaceHolder?) {
             super.onSurfaceDestroyed(holder)
             this.visible = false
+            this.readyToDraw = false
             handler.removeCallbacks(drawRunner)
         }
 
         override fun onSurfaceChanged(
             holder: SurfaceHolder?, format: Int, width: Int, height: Int
         ) {
+            this.holder = holder
             this.width = width
             this.height = height
             clockUtils.updateDimensions(width, height)
@@ -117,8 +131,8 @@ class WallpaperService : WallpaperService() {
             canvas: Canvas, bitmap: Bitmap, canvasWidth: Int, canvasHeight: Int
         ) {
             val scaleFactor = max(
-                desiredMinimumWidth.toFloat() / bitmap.width,
-                desiredMinimumHeight.toFloat() / bitmap.height
+                width.toFloat() / bitmap.width,
+                height.toFloat() / bitmap.height
             )
 
             val scaledWidth = (bitmap.width * scaleFactor).toInt()
@@ -133,35 +147,36 @@ class WallpaperService : WallpaperService() {
 
         private fun draw() {
             val nextDraw = SystemClock.uptimeMillis() + (1000 / 30)
-            val holder = surfaceHolder
             val canvas: Canvas?
             clockUtils.updateVisibility(visible)
-            if (visible) {
-                canvas = holder.lockHardwareCanvas()
-                if (canvas != null) {
-                    backgroundImageUtils.getBackgroundImage()?.also { backgroundImage ->
-                        canvas.save()
-                        canvas.translate(if (!isPreview) width * xOffset else 0f, 0f)
-                        try {
-                            drawImageCover(canvas, backgroundImage, width, height)
-                        } catch (exception: RuntimeException) {
-                            backgroundImageUtils.getSmallBackgroundImage()?.also { smallBackgroundImage ->
-                                drawImageCover(canvas, smallBackgroundImage, width, height)
+            holder?.let { holder ->
+                if (visible && readyToDraw && holder.surface.isValid) {
+                    canvas = holder.lockHardwareCanvas() ?: holder.lockCanvas()
+                    if (canvas != null) {
+                        backgroundImageUtils.getBackgroundImage()?.also { backgroundImage ->
+                            canvas.withTranslation(if (!isPreview) width * xOffset else 0f, 0f) {
+                                try {
+                                    drawImageCover(this, backgroundImage, width, height)
+                                } catch (exception: RuntimeException) {
+                                    backgroundImageUtils.getSmallBackgroundImage()
+                                        ?.also { smallBackgroundImage ->
+                                            drawImageCover(this, smallBackgroundImage, width, height)
+                                        }
+                                }
                             }
                         }
-                        canvas.restore()
+                        if (backgroundImageUtils.getBackgroundImage() == null) {
+                            val blackPaint = Paint()
+                            blackPaint.color = Color.BLACK
+                            blackPaint.style = Paint.Style.FILL
+                            canvas.drawRect(
+                                RectF(0f, 0f, width.toFloat(), height.toFloat()), blackPaint
+                            )
+                        }
+                        mediaUtils.drawMediaPlayer(canvas)
+                        clockUtils.drawClock(canvas)
+                        holder.unlockCanvasAndPost(canvas)
                     }
-                    if (backgroundImageUtils.getBackgroundImage() == null) {
-                        val blackPaint = Paint()
-                        blackPaint.color = Color.BLACK
-                        blackPaint.style = Paint.Style.FILL
-                        canvas.drawRect(
-                            RectF(0f, 0f, width.toFloat(), height.toFloat()), blackPaint
-                        )
-                    }
-                    mediaUtils.drawMediaPlayer(canvas)
-                    clockUtils.drawClock(canvas)
-                    holder.unlockCanvasAndPost(canvas)
                 }
             }
             handler.removeCallbacks(drawRunner)
