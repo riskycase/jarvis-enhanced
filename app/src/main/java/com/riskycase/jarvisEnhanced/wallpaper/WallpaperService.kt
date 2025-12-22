@@ -146,7 +146,7 @@ class WallpaperService : WallpaperService() {
         }
 
         private fun draw() {
-            val nextDraw = SystemClock.uptimeMillis() + (1000 / 30)
+            val nextDraw = SystemClock.uptimeMillis() + (1000 / 60)
             val canvas: Canvas?
             clockUtils.updateVisibility(visible)
             holder?.let { holder ->
@@ -154,7 +154,7 @@ class WallpaperService : WallpaperService() {
                     canvas = holder.lockHardwareCanvas() ?: holder.lockCanvas()
                     if (canvas != null) {
                         backgroundImageUtils.getBackgroundImage()?.also { backgroundImage ->
-                            canvas.withTranslation(if (!isPreview) width * xOffset else 0f, 0f) {
+                            canvas.withTranslation(if (!isPreview) width * xOffset * 0.5f else 0f, 0f) {
                                 try {
                                     drawImageCover(this, backgroundImage, width, height)
                                 } catch (exception: RuntimeException) {

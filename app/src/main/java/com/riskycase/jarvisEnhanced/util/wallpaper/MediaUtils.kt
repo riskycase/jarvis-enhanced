@@ -33,10 +33,16 @@ import com.riskycase.jarvisEnhanced.util.SocketChannels.MusicDetails
 import com.riskycase.jarvisEnhanced.util.SocketIOTransport
 import com.riskycase.jarvisEnhanced.util.SystemServicesContainer
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.ByteArrayOutputStream
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
+import kotlin.concurrent.read
+import kotlin.concurrent.write
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
@@ -55,23 +61,33 @@ class MediaUtils @Inject constructor(
 
     private val musicDetailsMap: MutableMap<String, String> = HashMap()
 
+    private val albumArtBitmapMutex: Mutex = Mutex(locked = false)
+
     private var albumArtBitmap: Bitmap? = null
         set(value) {
-            // Recycle the old bitmap
-            value?.let {
-                if (!value.isRecycled) {
-                    field?.recycle()
-                    val width = value.width
-                    val height = value.height
-                    val smaller = minOf(width, height)
-                    field = Bitmap.createBitmap(
-                        value, (width - smaller) / 2, (height - smaller) / 2, smaller, smaller
-                    )
+            runBlocking {
+                albumArtBitmapMutex.withLock {
+                    // Recycle the old bitmap
+                    value?.let {
+                        if (!value.isRecycled) {
+                            val oldValue = field
+                            val width = value.width
+                            val height = value.height
+                            val smaller = minOf(width, height)
+                            field = Bitmap.createBitmap(
+                                value,
+                                (width - smaller) / 2,
+                                (height - smaller) / 2,
+                                smaller,
+                                smaller
+                            )
 
-                    // If the new bitmap was cropped, recycle the original
-                    if (field != value) {
-                        value.recycle()
-
+                            // If the new bitmap was cropped, recycle the original
+                            if (field != value) {
+                                value.recycle()
+                            }
+                            oldValue?.recycle()
+                        }
                     }
                 }
             }
@@ -181,20 +197,22 @@ class MediaUtils @Inject constructor(
                         setAlbumArtFromController(controller)
                     }
                     handler.postDelayed({
-                        val bitmap = getAlbumArtFromController(controller)
                         val byteArrayOutputStream = ByteArrayOutputStream()
-                        bitmap?.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
-                            .also {
-                                socketIOTransport.sendMessage(
-                                    MUSIC_ALBUM_ART_DETAILS, mapOf(
-                                        Pair(
-                                            controller.packageName, Base64.encodeToString(
-                                                byteArrayOutputStream.toByteArray(), Base64.NO_WRAP
+                        getAlbumArtFromController(controller)?.also {
+                            it.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
+                                .also {
+                                    socketIOTransport.sendMessage(
+                                        MUSIC_ALBUM_ART_DETAILS, mapOf(
+                                            Pair(
+                                                controller.packageName, Base64.encodeToString(
+                                                    byteArrayOutputStream.toByteArray(),
+                                                    Base64.NO_WRAP
+                                                )
                                             )
                                         )
                                     )
-                                )
-                            }
+                                }
+                        }
                     }, 450) // Needed to give Poweramp space to update art
                 }
             }
@@ -306,22 +324,33 @@ class MediaUtils @Inject constructor(
                     it, mediaCenter.x, mediaCenter.y
                 )
             }
+            val albumArtBackgroundPaint = Paint()
+            albumArtBackgroundPaint.color = backgroundImageUtils.getBaseColor()
+            albumArtBackgroundPaint.style = Paint.Style.FILL
+            albumArtBackgroundPaint.isAntiAlias = true
+            canvas.drawCircle(
+                mediaCenter.x, mediaCenter.y, mediaRadius - 5, albumArtBackgroundPaint
+            )
+            val albumArtPath = Path()
+            albumArtPath.addCircle(
+                mediaCenter.x, mediaCenter.y, mediaRadius, Path.Direction.CW
+            )
+            canvas.clipPath(albumArtPath)
             if (albumArtBitmap == null) setAlbumArtFromController(activeController)
-            albumArtBitmap?.let {
-                val albumArtPath = Path()
-                albumArtPath.addCircle(
-                    mediaCenter.x, mediaCenter.y, mediaRadius, Path.Direction.CW
-                )
-                canvas.clipPath(albumArtPath)
-                canvas.drawBitmap(
-                    it, null, RectF(
-                        mediaCenter.x - mediaRadius,
-                        mediaCenter.y - mediaRadius,
-                        mediaCenter.x + mediaRadius,
-                        mediaCenter.y + mediaRadius,
-                    ), Paint()
-                )
-                canvas.restore()
+            runBlocking {
+                albumArtBitmapMutex.withLock {
+                    albumArtBitmap?.let {
+                        canvas.drawBitmap(
+                            it, null, RectF(
+                                mediaCenter.x - mediaRadius,
+                                mediaCenter.y - mediaRadius,
+                                mediaCenter.x + mediaRadius,
+                                mediaCenter.y + mediaRadius,
+                            ), Paint()
+                        )
+                        canvas.restore()
+                    }
+                }
             }
         }
     }
