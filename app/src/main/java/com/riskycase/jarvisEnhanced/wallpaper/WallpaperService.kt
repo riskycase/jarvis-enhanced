@@ -154,6 +154,8 @@ class WallpaperService : WallpaperService() {
                     canvas = holder.lockHardwareCanvas() ?: holder.lockCanvas()
                     if (canvas != null) {
                         backgroundImageUtils.getBackgroundImage()?.also { backgroundImage ->
+                            canvas.save()
+                            canvas.clipRect(0f, 0f, width.toFloat(), height.toFloat())
                             canvas.withTranslation(if (!isPreview) width * xOffset * 0.5f else 0f, 0f) {
                                 try {
                                     drawImageCover(this, backgroundImage, width, height)
@@ -164,6 +166,7 @@ class WallpaperService : WallpaperService() {
                                         }
                                 }
                             }
+                            canvas.restore()
                         }
                         if (backgroundImageUtils.getBackgroundImage() == null) {
                             val blackPaint = Paint()

@@ -1,5 +1,6 @@
 package com.riskycase.jarvisEnhanced.util.wallpaper
 
+import android.app.ActivityOptions
 import android.app.KeyguardManager
 import android.content.ComponentName
 import android.content.Context
@@ -15,6 +16,7 @@ import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -33,18 +35,14 @@ import com.riskycase.jarvisEnhanced.util.SocketChannels.MusicDetails
 import com.riskycase.jarvisEnhanced.util.SocketIOTransport
 import com.riskycase.jarvisEnhanced.util.SystemServicesContainer
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+
 import java.io.ByteArrayOutputStream
-import java.util.concurrent.locks.ReentrantReadWriteLock
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
-import kotlin.concurrent.read
-import kotlin.concurrent.write
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import androidx.core.graphics.withSave
 
 @Singleton
 class MediaUtils @Inject constructor(
@@ -61,21 +59,23 @@ class MediaUtils @Inject constructor(
 
     private val musicDetailsMap: MutableMap<String, String> = HashMap()
 
-    private val albumArtBitmapMutex: Mutex = Mutex(locked = false)
+    private val albumArtLock = Any()
 
+    @Volatile
     private var albumArtBitmap: Bitmap? = null
         set(value) {
-            runBlocking {
-                albumArtBitmapMutex.withLock {
-                    // Recycle the old bitmap
-                    value?.let {
-                        if (!value.isRecycled) {
-                            val oldValue = field
-                            val width = value.width
-                            val height = value.height
-                            val smaller = minOf(width, height)
+            synchronized(albumArtLock) {
+                // Only process if the new value is not null and not recycled
+                value?.let { newBitmap ->
+                    if (!newBitmap.isRecycled) {
+                        val oldValue = field
+                        val width = newBitmap.width
+                        val height = newBitmap.height
+                        val smaller = minOf(width, height)
+                        
+                        try {
                             field = Bitmap.createBitmap(
-                                value,
+                                newBitmap,
                                 (width - smaller) / 2,
                                 (height - smaller) / 2,
                                 smaller,
@@ -83,12 +83,32 @@ class MediaUtils @Inject constructor(
                             )
 
                             // If the new bitmap was cropped, recycle the original
-                            if (field != value) {
-                                value.recycle()
+                            if (field != newBitmap && !newBitmap.isRecycled) {
+                                newBitmap.recycle()
                             }
-                            oldValue?.recycle()
+                            
+                            // Safely recycle the old bitmap
+                            oldValue?.let { old ->
+                                if (!old.isRecycled) {
+                                    old.recycle()
+                                }
+                            }
+                        } catch (e: IllegalArgumentException) {
+                            // Handle case where bitmap parameters are invalid
+                            // Keep the old bitmap in this case
+                        } catch (e: RuntimeException) {
+                            // Handle other bitmap-related exceptions
+                            // Keep the old bitmap in this case
                         }
                     }
+                } ?: run {
+                    // If value is null, just recycle the old bitmap
+                    field?.let { old ->
+                        if (!old.isRecycled) {
+                            old.recycle()
+                        }
+                    }
+                    field = null
                 }
             }
         }
@@ -198,20 +218,28 @@ class MediaUtils @Inject constructor(
                     }
                     handler.postDelayed({
                         val byteArrayOutputStream = ByteArrayOutputStream()
-                        getAlbumArtFromController(controller)?.also {
-                            it.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
-                                .also {
-                                    socketIOTransport.sendMessage(
-                                        MUSIC_ALBUM_ART_DETAILS, mapOf(
-                                            Pair(
-                                                controller.packageName, Base64.encodeToString(
-                                                    byteArrayOutputStream.toByteArray(),
-                                                    Base64.NO_WRAP
+                        getAlbumArtFromController(controller)?.also { bitmap ->
+                            // Check if bitmap is recycled before compressing
+                            if (!bitmap.isRecycled) {
+                                try {
+                                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
+                                        .also {
+                                            socketIOTransport.sendMessage(
+                                                MUSIC_ALBUM_ART_DETAILS, mapOf(
+                                                    Pair(
+                                                        controller.packageName, Base64.encodeToString(
+                                                            byteArrayOutputStream.toByteArray(),
+                                                            Base64.NO_WRAP
+                                                        )
+                                                    )
                                                 )
                                             )
-                                        )
-                                    )
+                                        }
+                                } catch (e: IllegalStateException) {
+                                    // Handle case where bitmap gets recycled during compression
+                                    // This can happen in rare race conditions
                                 }
+                            }
                         }
                     }, 450) // Needed to give Poweramp space to update art
                 }
@@ -312,43 +340,50 @@ class MediaUtils @Inject constructor(
 
     private fun drawAlbumArt(canvas: Canvas) {
         activeController?.also { activeController ->
-            canvas.save()
-            activeController.metadata?.getLong(
-                MediaMetadata.METADATA_KEY_DURATION
-            )?.let {
-                (activeController.playbackState?.position?.toFloat())?.div(
-                    it
-                )?.times(360f)
-            }?.let {
-                canvas.rotate(
-                    it, mediaCenter.x, mediaCenter.y
+            canvas.withSave {
+                activeController.metadata?.getLong(
+                    MediaMetadata.METADATA_KEY_DURATION
+                )?.let {
+                    (activeController.playbackState?.position?.toFloat())?.div(
+                        it
+                    )?.times(360f)
+                }?.let {
+                    rotate(
+                        it, mediaCenter.x, mediaCenter.y
+                    )
+                }
+                val albumArtBackgroundPaint = Paint()
+                albumArtBackgroundPaint.color = backgroundImageUtils.getBaseColor()
+                albumArtBackgroundPaint.style = Paint.Style.FILL
+                albumArtBackgroundPaint.isAntiAlias = true
+                drawCircle(
+                    mediaCenter.x, mediaCenter.y, mediaRadius - 5, albumArtBackgroundPaint
                 )
-            }
-            val albumArtBackgroundPaint = Paint()
-            albumArtBackgroundPaint.color = backgroundImageUtils.getBaseColor()
-            albumArtBackgroundPaint.style = Paint.Style.FILL
-            albumArtBackgroundPaint.isAntiAlias = true
-            canvas.drawCircle(
-                mediaCenter.x, mediaCenter.y, mediaRadius - 5, albumArtBackgroundPaint
-            )
-            val albumArtPath = Path()
-            albumArtPath.addCircle(
-                mediaCenter.x, mediaCenter.y, mediaRadius, Path.Direction.CW
-            )
-            canvas.clipPath(albumArtPath)
-            if (albumArtBitmap == null) setAlbumArtFromController(activeController)
-            runBlocking {
-                albumArtBitmapMutex.withLock {
-                    albumArtBitmap?.let {
-                        canvas.drawBitmap(
-                            it, null, RectF(
-                                mediaCenter.x - mediaRadius,
-                                mediaCenter.y - mediaRadius,
-                                mediaCenter.x + mediaRadius,
-                                mediaCenter.y + mediaRadius,
-                            ), Paint()
-                        )
-                        canvas.restore()
+                val albumArtPath = Path()
+                albumArtPath.addCircle(
+                    mediaCenter.x, mediaCenter.y, mediaRadius, Path.Direction.CW
+                )
+                clipPath(albumArtPath)
+                if (albumArtBitmap == null) setAlbumArtFromController(activeController)
+
+                synchronized(albumArtLock) {
+                    albumArtBitmap?.let { bitmap ->
+                        // Check if bitmap is recycled before drawing
+                        if (!bitmap.isRecycled) {
+                            try {
+                                drawBitmap(
+                                    bitmap, null, RectF(
+                                        mediaCenter.x - mediaRadius,
+                                        mediaCenter.y - mediaRadius,
+                                        mediaCenter.x + mediaRadius,
+                                        mediaCenter.y + mediaRadius,
+                                    ), Paint()
+                                )
+                            } catch (e: RuntimeException) {
+                                // Handle case where bitmap gets recycled during drawing
+                                // This can happen in rare race conditions
+                            }
+                        }
                     }
                 }
             }
@@ -409,7 +444,20 @@ class MediaUtils @Inject constructor(
                     2
                 ))
             ) {
-                activeController.sessionActivity?.send()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    activeController.sessionActivity?.send(
+                        ActivityOptions.makeBasic()
+                            .setPendingIntentBackgroundActivityStartMode(
+                                ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                            )
+                            .setPendingIntentCreatorBackgroundActivityStartMode(
+                                ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                            )
+                            .toBundle()
+                    )
+                } else {
+                    activeController.sessionActivity?.send()
+                }
             } else if (((controlsCenter.x - x.toFloat()).pow(2) + (controlsCenter.y - y.toFloat()).pow(
                     2
                 )) < (mediaRadius.times(0.5f).pow(2))

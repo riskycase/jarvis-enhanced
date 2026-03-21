@@ -1,7 +1,6 @@
 package com.riskycase.jarvisEnhanced.util.wallpaper
 
 import android.content.Context
-import android.graphics.BitmapFactory
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -14,6 +13,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.io.File
 
 @HiltWorker
 class NasaApodFetchWorker @AssistedInject constructor(
@@ -31,19 +31,21 @@ class NasaApodFetchWorker @AssistedInject constructor(
             val imageData = nasaApi.getApod(applicationContext.settingsDataStore.data.map {
                 if (it.hasNasaApodApiKey()) it.nasaApodApiKey else "DEMO_KEY"
             }.first())
-            applicationContext.openFileOutput("wallpaper", Context.MODE_PRIVATE).use {
+            val filesDir = applicationContext.filesDir
+            // Download to temp files first, then atomically rename
+            val tmpWallpaper = File(filesDir, "wallpaper.tmp")
+            val tmpSmall = File(filesDir, "wallpaper_small.tmp")
+            tmpWallpaper.outputStream().use {
                 it.write(nasaApi.downloadImage(imageData.hdUrl ?: imageData.url).bytes())
             }
-            applicationContext.openFileOutput("wallpaper_small", Context.MODE_PRIVATE).use {
+            tmpSmall.outputStream().use {
                 it.write(nasaApi.downloadImage(imageData.url).bytes())
             }
-            applicationContext.openFileInput("wallpaper_small").use {
-                backgroundImageUtils.setSmallBackgroundImage(BitmapFactory.decodeStream(it))
-            }
-            applicationContext.openFileInput("wallpaper").use {
-                backgroundImageUtils.setBackgroundImage(BitmapFactory.decodeStream(it))
-                systemServicesContainer.wallpaperEngine?.notifyColorsChanged()
-            }
+            // Atomic rename — old file is always either fully old or fully new
+            tmpSmall.renameTo(File(filesDir, "wallpaper_small"))
+            tmpWallpaper.renameTo(File(filesDir, "wallpaper"))
+            backgroundImageUtils.loadFromDisk()
+            systemServicesContainer.wallpaperEngine?.notifyColorsChanged()
             Result.success()
         } catch (e: Exception) {
             e.printStackTrace()
