@@ -58,6 +58,24 @@ class ClockUtils @Inject constructor(
             return field
         }
     private val clockShadowPaint = Paint()
+    private val batteryPaint = Paint()
+    private val bodyPaint = Paint()
+    private val clockPaint = Paint()
+    private val clipPath = Path()
+    private val donutClip = Path()
+    private val scratchPath = Path()
+    private val gradientMatrix = Matrix()
+    private val scratchRect = RectF()
+    private val innerClipRect = RectF()
+    private val outerClipRect = RectF()
+    private val frameCalendar: Calendar = Calendar.getInstance()
+
+    // Cached geometry — rebuilt only when center/radius change
+    private var lastCenter = PointF(Float.NaN, Float.NaN)
+    private var lastRadius = Float.NaN
+    private var innerFaceRadius = 0f
+    private var outerFaceRadius = 0f
+    private var cdr = 0f
 
     private var previousCenterState =
         if (keyguardManager.isKeyguardLocked) ClockCenterStates.KEYGUARD_LOCKED else ClockCenterStates.KEYGUARD_UNLOCKED
@@ -103,6 +121,9 @@ class ClockUtils @Inject constructor(
         textPaint.typeface = applicationContext.resources.getFont(R.font.dseg7modernmini)
         clockShadowPaint.color = Color.argb(64, 0, 0, 0)
         clockShadowPaint.style = Paint.Style.FILL
+        batteryPaint.style = Paint.Style.STROKE
+        bodyPaint.style = Paint.Style.FILL
+        clockPaint.style = Paint.Style.FILL
     }
 
     private fun getHandRotations(calendar: Calendar, value: Int): Float {
@@ -227,27 +248,8 @@ class ClockUtils @Inject constructor(
         )
     }
 
-    private fun getRotation(value: Int): Float {
-        val calendar = Calendar.getInstance()
-        val finalRotation = when (value) {
-            Calendar.HOUR -> ((calendar.get(Calendar.HOUR)
-                .toFloat() / 12f) + (calendar.get(Calendar.MINUTE)
-                .toFloat() / 720f) + (calendar.get(
-                Calendar.SECOND
-            ).toFloat() / 43200f) + calendar.get(Calendar.MILLISECOND).toFloat() / 43200000f) * 360f
-
-            Calendar.MINUTE -> ((calendar.get(Calendar.MINUTE).toFloat() / 60f) + (calendar.get(
-                Calendar.SECOND
-            ).toFloat() / 3600f) + calendar.get(
-                Calendar.MILLISECOND
-            ).toFloat() / 3600000f) * 360f
-
-            Calendar.SECOND -> ((calendar.get(Calendar.SECOND).toFloat() / 60f) + calendar.get(
-                Calendar.MILLISECOND
-            ).toFloat() / 60000f) * 360f
-
-            else -> 0f
-        }
+    private fun getRotation(calendar: Calendar, value: Int): Float {
+        val finalRotation = getHandRotations(calendar, value)
         val currentVisibleState =
             if (keyguardManager.isKeyguardLocked) ClockRadiusStates.KEYGUARD_LOCKED else ClockRadiusStates.KEYGUARD_UNLOCKED
         if (currentVisibleState != previousVisibleState) {
@@ -258,8 +260,8 @@ class ClockUtils @Inject constructor(
                     else -> secondHandRotationAnimator
                 }).forceValue(finalRotation)
             } else {
-                val finalCalendar = Calendar.getInstance()
-                finalCalendar.add(
+                val savedTime = calendar.timeInMillis
+                calendar.add(
                     Calendar.MILLISECOND,
                     (lockUnlockAnimationDuration + clockSweepAnimationDuration).toInt()
                 )
@@ -271,8 +273,9 @@ class ClockUtils @Inject constructor(
                     System.currentTimeMillis() + lockUnlockAnimationDuration,
                     lockUnlockAnimationDuration,
                     0f,
-                    getHandRotations(finalCalendar, value)
+                    getHandRotations(calendar, value)
                 )
+                calendar.timeInMillis = savedTime
             }
         }
         return (when (value) {
@@ -283,11 +286,12 @@ class ClockUtils @Inject constructor(
     }
 
     private fun getHandGeometry(
+        calendar: Calendar,
         width: Float,
         height: Float,
         constant: Int
     ): Triple<PointF, PointF, PointF> {
-        val rotation = getRotation(constant)
+        val rotation = getRotation(calendar, constant)
         val sinValue = sin(rotation * PI / 180f).toFloat()
         val cosValue = cos(rotation * PI / 180f).toFloat()
         return Triple(
@@ -305,7 +309,8 @@ class ClockUtils @Inject constructor(
         widthCW: PointF,
         paint: Paint
     ) {
-        val handPath = Path()
+        val handPath = scratchPath
+        handPath.reset()
         handPath.moveTo(center.x + start.x, center.y + start.y)
         handPath.rLineTo(heightOutwards.x, heightOutwards.y)
         handPath.rLineTo(widthCW.x, widthCW.y)
@@ -330,7 +335,8 @@ class ClockUtils @Inject constructor(
         val wx = widthCW.x
         val wy = widthCW.y
 
-        val shadowPath = Path()
+        val shadowPath = scratchPath
+        shadowPath.reset()
         shadowPath.moveTo(center.x + sx, center.y + sy)
         shadowPath.lineTo(center.x + sx + hx, center.y + sy + hy)
         shadowPath.lineTo(center.x + sx + hx + so, center.y + sy + hy + so)
@@ -346,31 +352,60 @@ class ClockUtils @Inject constructor(
         val center = getClockCenter()
         val radius = getClockRadius()
 
-        val batteryPaint = Paint()
-        batteryPaint.shader = SweepGradient(center.x, center.y, Color.RED, Color.GREEN).apply {
-            val rotationMatrix = Matrix()
-            rotationMatrix.preRotate(-90f, center.x, center.y)
-            setLocalMatrix(rotationMatrix)
+        val batteryPaint = this.batteryPaint
+        if (center.x != lastCenter.x || center.y != lastCenter.y || radius != lastRadius) {
+            innerFaceRadius = radius.times(0.98f)
+            outerFaceRadius = radius.times(1.02f)
+            cdr = innerFaceRadius.times(10f / 108f)
+
+            gradientMatrix.reset()
+            gradientMatrix.preRotate(-90f, center.x, center.y)
+            batteryPaint.shader = SweepGradient(center.x, center.y, Color.RED, Color.GREEN).apply {
+                setLocalMatrix(gradientMatrix)
+            }
+            batteryPaint.strokeWidth = radius * 2f / 30f
+
+            clipPath.reset()
+            clipPath.addCircle(center.x, center.y, innerFaceRadius, Path.Direction.CW)
+
+            innerClipRect.set(center.x - cdr, center.y - cdr, center.x + cdr, center.y + cdr)
+            outerClipRect.set(
+                center.x - innerFaceRadius, center.y - innerFaceRadius,
+                center.x + innerFaceRadius, center.y + innerFaceRadius
+            )
+            val tangentHalf = Math.toDegrees(kotlin.math.asin((cdr / innerFaceRadius).toDouble())).toFloat()
+            val angle1 = 45f - tangentHalf
+            val angle2 = 45f + tangentHalf
+
+            donutClip.reset()
+            donutClip.arcTo(innerClipRect, -45f, 0f, true)
+            donutClip.lineTo(
+                center.x + innerFaceRadius * cos(angle1.toDouble() * PI / 180.0).toFloat(),
+                center.y + innerFaceRadius * sin(angle1.toDouble() * PI / 180.0).toFloat()
+            )
+            donutClip.arcTo(outerClipRect, angle1, -(360f - (angle2 - angle1)))
+            donutClip.lineTo(
+                center.x + cdr * cos(135.0 * PI / 180.0).toFloat(),
+                center.y + cdr * sin(135.0 * PI / 180.0).toFloat()
+            )
+            donutClip.arcTo(innerClipRect, 135f, -180f)
+            donutClip.close()
+
+            lastCenter.set(center.x, center.y)
+            lastRadius = radius
         }
-        batteryPaint.style = Paint.Style.STROKE
-        batteryPaint.strokeWidth = radius * 2f/30f
 
         canvas.drawArc(
-            RectF(
-                center.x - radius, center.y - radius, center.x + radius, center.y + radius
-            ),
+            scratchRect.apply { set(center.x - radius, center.y - radius, center.x + radius, center.y + radius) },
             -90f,
             (batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) * 3.6f),
             false,
             batteryPaint
         )
 
-        val bodyPaint = Paint()
+        val bodyPaint = this.bodyPaint
         bodyPaint.color = backgroundImageUtils.getBaseColor()
         bodyPaint.style = Paint.Style.FILL
-
-        val innerFaceRadius = radius.times(0.98f)
-        val outerFaceRadius = radius.times(1.02f)
 
         // Main face
         canvas.drawCircle(center.x, center.y, innerFaceRadius, bodyPaint)
@@ -380,7 +415,8 @@ class ClockUtils @Inject constructor(
         // Border outline
         canvas.drawCircle(center.x, center.y, outerFaceRadius, bodyPaint)
 
-        val now = Calendar.getInstance()
+        val now = frameCalendar
+        now.timeInMillis = System.currentTimeMillis()
         val contrastColor = backgroundImageUtils.getColorOnBaseColor()
 
         if (!keyguardManager.isKeyguardLocked) {
@@ -390,21 +426,21 @@ class ClockUtils @Inject constructor(
                 )
             textPaint.color = backgroundImageUtils.getDarkerBaseColor()
             canvas.drawRect(
-                RectF(
+                scratchRect.apply { set(
                     center.x - (textBounds.width().toFloat() / 2f) - (radius/20f),
                     center.y - (radius / 2f) - (textBounds.height().toFloat()) + (radius/40f),
                     center.x + (textBounds.width().toFloat() / 2f) + (radius * 1.75f/40f),
                     center.y - (radius / 2f) + (radius * 4.75f/40f)
-                ), textPaint
+                ) }, textPaint
             )
             textPaint.color = backgroundImageUtils.getDarkBaseColor()
             canvas.drawRect(
-                RectF(
+                scratchRect.apply { set(
                     center.x - (textBounds.width().toFloat() / 2f) - (radius/40f),
                     center.y - (radius / 2f) - (textBounds.height().toFloat()) + (radius/20f),
                     center.x + (textBounds.width().toFloat() / 2f) + (radius/40f),
                     center.y - (radius / 2f) + (radius/10f)
-                ), textPaint
+                ) }, textPaint
             )
             textPaint.color = Color.argb(96, 128, 128, 128)
             canvas.drawText(
@@ -422,45 +458,14 @@ class ClockUtils @Inject constructor(
             )
         }
 
-        val clockPaint = Paint()
+        val clockPaint = this.clockPaint
         clockPaint.color = contrastColor
         clockPaint.style = Paint.Style.FILL
 
-        // Clip to clock face so shadows are masked without Path.Op
-        val clipPath = Path()
-        clipPath.addCircle(center.x, center.y, innerFaceRadius, Path.Direction.CW)
-
         // Compute geometry for all hands
-        val hourGeom = getHandGeometry(radius / 18f, innerFaceRadius.times(0.75f), Calendar.HOUR)
-        val minuteGeom = getHandGeometry(radius / 30f, innerFaceRadius, Calendar.MINUTE)
-        val secondGeom = getHandGeometry(radius / 80f, innerFaceRadius, Calendar.SECOND)
-
-        // Donut clip: excludes center dot, keeps area between center dot and clock face
-        val cdr = innerFaceRadius.times(10f / 108f)
-        val innerClipRect = RectF(
-            center.x - cdr, center.y - cdr, center.x + cdr, center.y + cdr
-        )
-        val outerClipRect = RectF(
-            center.x - innerFaceRadius, center.y - innerFaceRadius,
-            center.x + innerFaceRadius, center.y + innerFaceRadius
-        )
-        val tangentHalf = Math.toDegrees(kotlin.math.asin((cdr / innerFaceRadius).toDouble())).toFloat()
-        val angle1 = 45f - tangentHalf
-        val angle2 = 45f + tangentHalf
-
-        val donutClip = Path()
-        donutClip.arcTo(innerClipRect, -45f, 0f, true)
-        donutClip.lineTo(
-            center.x + innerFaceRadius * cos(angle1.toDouble() * PI / 180.0).toFloat(),
-            center.y + innerFaceRadius * sin(angle1.toDouble() * PI / 180.0).toFloat()
-        )
-        donutClip.arcTo(outerClipRect, angle1, -(360f - (angle2 - angle1)))
-        donutClip.lineTo(
-            center.x + cdr * cos(135.0 * PI / 180.0).toFloat(),
-            center.y + cdr * sin(135.0 * PI / 180.0).toFloat()
-        )
-        donutClip.arcTo(innerClipRect, 135f, -180f)
-        donutClip.close()
+        val hourGeom = getHandGeometry(now, radius / 18f, innerFaceRadius.times(0.75f), Calendar.HOUR)
+        val minuteGeom = getHandGeometry(now, radius / 30f, innerFaceRadius, Calendar.MINUTE)
+        val secondGeom = getHandGeometry(now, radius / 80f, innerFaceRadius, Calendar.SECOND)
 
         // Draw hand shadows clipped to donut (excludes center dot area)
         canvas.withClip(donutClip) {
@@ -473,15 +478,15 @@ class ClockUtils @Inject constructor(
         canvas.withClip(clipPath) {
             val so = innerFaceRadius.times(2f)
             val csrD = cdr / sqrt(2f)
-            val centerShadowPath = Path()
-            centerShadowPath.moveTo(center.x + csrD, center.y - csrD)
-            centerShadowPath.rLineTo(so, so)
-            centerShadowPath.rLineTo(-cdr * sqrt(2f), cdr * sqrt(2f))
-            centerShadowPath.rLineTo(-so, -so)
-            centerShadowPath.close()
-            drawPath(centerShadowPath, clockShadowPaint)
-            drawPath(centerShadowPath, clockShadowPaint)
-            drawPath(centerShadowPath, clockShadowPaint)
+            scratchPath.reset()
+            scratchPath.moveTo(center.x + csrD, center.y - csrD)
+            scratchPath.rLineTo(so, so)
+            scratchPath.rLineTo(-cdr * sqrt(2f), cdr * sqrt(2f))
+            scratchPath.rLineTo(-so, -so)
+            scratchPath.close()
+            drawPath(scratchPath, clockShadowPaint)
+            drawPath(scratchPath, clockShadowPaint)
+            drawPath(scratchPath, clockShadowPaint)
         }
 
         // Draw hands clipped to clock face
