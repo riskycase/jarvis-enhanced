@@ -16,6 +16,7 @@ import android.icu.text.SimpleDateFormat
 import android.icu.util.Calendar
 import android.os.BatteryManager
 import android.provider.AlarmClock
+import androidx.core.graphics.withClip
 import com.riskycase.jarvisEnhanced.R
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -157,13 +158,13 @@ class ClockUtils @Inject constructor(
                         unlockedVisibleRadius
                     )
                     val finalCalendar = Calendar.getInstance()
-                    val hourRotation = getHandRotations(finalCalendar, Calendar.HOUR)
-                    val minuteRotation = getHandRotations(finalCalendar, Calendar.MINUTE)
-                    val secondRotation = getHandRotations(finalCalendar, Calendar.SECOND)
                     finalCalendar.add(
                         Calendar.MILLISECOND,
                         (lockUnlockAnimationDuration + clockSweepAnimationDuration).toInt()
                     )
+                    val hourRotation = getHandRotations(finalCalendar, Calendar.HOUR)
+                    val minuteRotation = getHandRotations(finalCalendar, Calendar.MINUTE)
+                    val secondRotation = getHandRotations(finalCalendar, Calendar.SECOND)
                     hourHandRotationAnimator.setAnimation(
                         System.currentTimeMillis() + lockUnlockAnimationDuration,
                         clockSweepAnimationDuration,
@@ -281,90 +282,63 @@ class ClockUtils @Inject constructor(
         }).getValue(System.currentTimeMillis(), finalRotation)
     }
 
-    private fun drawHand(
-        canvas: Canvas,
-        center: PointF,
+    private fun getHandGeometry(
         width: Float,
         height: Float,
-        constant: Int,
-        handPaint: Paint,
-        radius: Float
-    ) {
+        constant: Int
+    ): Triple<PointF, PointF, PointF> {
         val rotation = getRotation(constant)
-        val shadowPaint = clockShadowPaint
         val sinValue = sin(rotation * PI / 180f).toFloat()
         val cosValue = cos(rotation * PI / 180f).toFloat()
+        return Triple(
+            PointF(width.times(0.5f) * -cosValue, width.times(0.5f) * -sinValue),
+            PointF(height * sinValue, height * -cosValue),
+            PointF(width * cosValue, width * sinValue)
+        )
+    }
 
-        val start = PointF(
-            width.times(0.5f) * -cosValue, width.times(0.5f) * -sinValue
-        ) // width/2, rotation - 180
-        val heightOutwards = PointF(
-            height * sinValue, height * -cosValue
-        ) // height, rotation - 90
-        val widthCW = PointF(
-            width * cosValue, width * sinValue
-        ) // width, rotation
-
-
+    private fun drawHandShape(
+        canvas: Canvas,
+        center: PointF,
+        start: PointF,
+        heightOutwards: PointF,
+        widthCW: PointF,
+        paint: Paint
+    ) {
         val handPath = Path()
-        handPath.moveTo(center.x, center.y)
-        handPath.rMoveTo(start.x, start.y)
+        handPath.moveTo(center.x + start.x, center.y + start.y)
         handPath.rLineTo(heightOutwards.x, heightOutwards.y)
         handPath.rLineTo(widthCW.x, widthCW.y)
         handPath.rLineTo(-heightOutwards.x, -heightOutwards.y)
         handPath.close()
-        canvas.drawPath(handPath, handPaint)
+        canvas.drawPath(handPath, paint)
+    }
+
+    private fun drawHandShadow(
+        canvas: Canvas,
+        center: PointF,
+        start: PointF,
+        heightOutwards: PointF,
+        widthCW: PointF,
+        radius: Float
+    ) {
+        val so = radius.times(2f)
+        val sx = start.x
+        val sy = start.y
+        val hx = heightOutwards.x
+        val hy = heightOutwards.y
+        val wx = widthCW.x
+        val wy = widthCW.y
 
         val shadowPath = Path()
-        shadowPath.moveTo(center.x, center.y)
-        shadowPath.rMoveTo(start.x, start.y)
-        if (rotation < 45f || rotation > 315f) {
-            shadowPath.rLineTo(widthCW.x, widthCW.y)
-            shadowPath.rLineTo(heightOutwards.x, heightOutwards.y)
-            shadowPath.rLineTo(radius.times(2f), radius.times(2f))
-            shadowPath.rLineTo(-heightOutwards.x, -heightOutwards.y)
-            shadowPath.rLineTo(-widthCW.x, -widthCW.y)
-        } else if (rotation < 135f) {
-            shadowPath.rMoveTo(widthCW.x, widthCW.y)
-            shadowPath.rLineTo(heightOutwards.x, heightOutwards.y)
-            shadowPath.rLineTo(-widthCW.x, -widthCW.y)
-            shadowPath.rLineTo(radius.times(2f), radius.times(2f))
-            shadowPath.rLineTo(widthCW.x, widthCW.y)
-            shadowPath.rLineTo(-heightOutwards.x, -heightOutwards.y)
-        } else if (rotation < 215f) {
-            shadowPath.rMoveTo(widthCW.x, widthCW.y)
-            shadowPath.rMoveTo(heightOutwards.x, heightOutwards.y)
-            shadowPath.rLineTo(-widthCW.x, -widthCW.y)
-            shadowPath.rLineTo(-heightOutwards.x, -heightOutwards.y)
-            shadowPath.rLineTo(radius.times(2f), radius.times(2f))
-            shadowPath.rLineTo(heightOutwards.x, heightOutwards.y)
-            shadowPath.rLineTo(widthCW.x, widthCW.y)
-        } else {
-            shadowPath.rMoveTo(heightOutwards.x, heightOutwards.y)
-            shadowPath.rLineTo(-heightOutwards.x, -heightOutwards.y)
-            shadowPath.rLineTo(widthCW.x, widthCW.y)
-            shadowPath.rLineTo(radius.times(2f), radius.times(2f))
-            shadowPath.rLineTo(-widthCW.x, -widthCW.y)
-            shadowPath.rLineTo(heightOutwards.x, heightOutwards.y)
-        }
+        shadowPath.moveTo(center.x + sx, center.y + sy)
+        shadowPath.lineTo(center.x + sx + hx, center.y + sy + hy)
+        shadowPath.lineTo(center.x + sx + hx + so, center.y + sy + hy + so)
+        shadowPath.lineTo(center.x + sx + hx + wx + so, center.y + sy + hy + wy + so)
+        shadowPath.lineTo(center.x + sx + wx + so, center.y + sy + wy + so)
+        shadowPath.lineTo(center.x + sx + wx, center.y + sy + wy)
         shadowPath.close()
-
-        val centerPath = Path()
-        val centerShadowRadius = radius.times(10f/108f)
-        centerPath.moveTo(center.x, center.y)
-        centerPath.rMoveTo(centerShadowRadius / sqrt(2f), -centerShadowRadius / sqrt(2f))
-        centerPath.rLineTo(radius * 2f, radius * 2f)
-        centerPath.rLineTo(-centerShadowRadius * sqrt(2f), centerShadowRadius * sqrt(2f))
-        centerPath.rLineTo(-radius * 2f, -radius * 2f)
-        centerPath.close()
-        shadowPath.op(centerPath, Path.Op.UNION)
-
-        val clockFacePath = Path()
-        clockFacePath.addCircle(center.x, center.y, radius, Path.Direction.CW)
-        shadowPath.op(clockFacePath, Path.Op.INTERSECT)
-
-        canvas.drawPath(shadowPath, shadowPaint)
-
+        canvas.drawPath(shadowPath, clockShadowPaint)
     }
 
     fun drawClock(canvas: Canvas) {
@@ -452,20 +426,70 @@ class ClockUtils @Inject constructor(
         clockPaint.color = contrastColor
         clockPaint.style = Paint.Style.FILL
 
-        // Hours hand
-        drawHand(
-            canvas, center, radius / 18f, innerFaceRadius.times(0.75f), Calendar.HOUR, clockPaint, innerFaceRadius
-        )
+        // Clip to clock face so shadows are masked without Path.Op
+        val clipPath = Path()
+        clipPath.addCircle(center.x, center.y, innerFaceRadius, Path.Direction.CW)
 
-        // Minutes hand
-        drawHand(
-            canvas, center, radius / 30f, innerFaceRadius, Calendar.MINUTE, clockPaint, innerFaceRadius
-        )
+        // Compute geometry for all hands
+        val hourGeom = getHandGeometry(radius / 18f, innerFaceRadius.times(0.75f), Calendar.HOUR)
+        val minuteGeom = getHandGeometry(radius / 30f, innerFaceRadius, Calendar.MINUTE)
+        val secondGeom = getHandGeometry(radius / 80f, innerFaceRadius, Calendar.SECOND)
 
-        // Seconds hand
-        drawHand(
-            canvas, center, radius / 80f, innerFaceRadius, Calendar.SECOND, clockPaint, innerFaceRadius
+        // Donut clip: excludes center dot, keeps area between center dot and clock face
+        val cdr = innerFaceRadius.times(10f / 108f)
+        val innerClipRect = RectF(
+            center.x - cdr, center.y - cdr, center.x + cdr, center.y + cdr
         )
+        val outerClipRect = RectF(
+            center.x - innerFaceRadius, center.y - innerFaceRadius,
+            center.x + innerFaceRadius, center.y + innerFaceRadius
+        )
+        val tangentHalf = Math.toDegrees(kotlin.math.asin((cdr / innerFaceRadius).toDouble())).toFloat()
+        val angle1 = 45f - tangentHalf
+        val angle2 = 45f + tangentHalf
+
+        val donutClip = Path()
+        donutClip.arcTo(innerClipRect, -45f, 0f, true)
+        donutClip.lineTo(
+            center.x + innerFaceRadius * cos(angle1.toDouble() * PI / 180.0).toFloat(),
+            center.y + innerFaceRadius * sin(angle1.toDouble() * PI / 180.0).toFloat()
+        )
+        donutClip.arcTo(outerClipRect, angle1, -(360f - (angle2 - angle1)))
+        donutClip.lineTo(
+            center.x + cdr * cos(135.0 * PI / 180.0).toFloat(),
+            center.y + cdr * sin(135.0 * PI / 180.0).toFloat()
+        )
+        donutClip.arcTo(innerClipRect, 135f, -180f)
+        donutClip.close()
+
+        // Draw hand shadows clipped to donut (excludes center dot area)
+        canvas.withClip(donutClip) {
+            drawHandShadow(this, center, hourGeom.first, hourGeom.second, hourGeom.third, innerFaceRadius)
+            drawHandShadow(this, center, minuteGeom.first, minuteGeom.second, minuteGeom.third, innerFaceRadius)
+            drawHandShadow(this, center, secondGeom.first, secondGeom.second, secondGeom.third, innerFaceRadius)
+        }
+
+        // Center dot shadow drawn 3x, clipped to clock face only (not donut)
+        canvas.withClip(clipPath) {
+            val so = innerFaceRadius.times(2f)
+            val csrD = cdr / sqrt(2f)
+            val centerShadowPath = Path()
+            centerShadowPath.moveTo(center.x + csrD, center.y - csrD)
+            centerShadowPath.rLineTo(so, so)
+            centerShadowPath.rLineTo(-cdr * sqrt(2f), cdr * sqrt(2f))
+            centerShadowPath.rLineTo(-so, -so)
+            centerShadowPath.close()
+            drawPath(centerShadowPath, clockShadowPaint)
+            drawPath(centerShadowPath, clockShadowPaint)
+            drawPath(centerShadowPath, clockShadowPaint)
+        }
+
+        // Draw hands clipped to clock face
+        canvas.withClip(clipPath) {
+            drawHandShape(this, center, hourGeom.first, hourGeom.second, hourGeom.third, clockPaint)
+            drawHandShape(this, center, minuteGeom.first, minuteGeom.second, minuteGeom.third, clockPaint)
+            drawHandShape(this, center, secondGeom.first, secondGeom.second, secondGeom.third, clockPaint)
+        }
 
         // Center piece
         bodyPaint.style = Paint.Style.FILL
