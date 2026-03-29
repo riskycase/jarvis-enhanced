@@ -22,7 +22,6 @@ import com.riskycase.jarvisEnhanced.util.wallpaper.MediaUtils
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlin.math.max
-import androidx.core.graphics.withClip
 
 @AndroidEntryPoint
 class WallpaperService : WallpaperService() {
@@ -132,8 +131,8 @@ class WallpaperService : WallpaperService() {
             canvas: Canvas, bitmap: Bitmap, canvasWidth: Int, canvasHeight: Int
         ) {
             val scaleFactor = max(
-                width.toFloat() / bitmap.width,
-                height.toFloat() / bitmap.height
+                canvasWidth.toFloat() / bitmap.width,
+                canvasHeight.toFloat() / bitmap.height
             )
 
             val scaledWidth = (bitmap.width * scaleFactor).toInt()
@@ -154,35 +153,28 @@ class WallpaperService : WallpaperService() {
                 if (visible && readyToDraw && holder.surface.isValid) {
                     canvas = holder.lockHardwareCanvas() ?: holder.lockCanvas()
                     if (canvas != null) {
+                        canvas.drawColor(Color.BLACK)
                         backgroundImageUtils.getBackgroundImage()?.also { backgroundImage ->
-                            canvas.withClip(0f, 0f, width.toFloat(), height.toFloat()) {
-                                withTranslation(
-                                    if (!isPreview) width * xOffset * 0.5f else 0f,
-                                    0f
-                                ) {
-                                    try {
-                                        drawImageCover(this, backgroundImage, width, height)
-                                    } catch (exception: RuntimeException) {
-                                        backgroundImageUtils.getSmallBackgroundImage()
-                                            ?.also { smallBackgroundImage ->
-                                                drawImageCover(
-                                                    this,
-                                                    smallBackgroundImage,
-                                                    width,
-                                                    height
-                                                )
-                                            }
-                                    }
+                            val parallaxWidth = if (!isPreview) (width * 1.5f).toInt() else width
+                            val parallaxOffset = -(parallaxWidth - width) / 2f
+                            canvas.withTranslation(
+                                parallaxOffset + if (!isPreview) width * xOffset * 0.5f else 0f,
+                                0f
+                            ) {
+                                try {
+                                    drawImageCover(this, backgroundImage, parallaxWidth, height)
+                                } catch (exception: RuntimeException) {
+                                    backgroundImageUtils.getSmallBackgroundImage()
+                                        ?.also { smallBackgroundImage ->
+                                            drawImageCover(
+                                                this,
+                                                smallBackgroundImage,
+                                                parallaxWidth,
+                                                height
+                                            )
+                                        }
                                 }
                             }
-                        }
-                        if (backgroundImageUtils.getBackgroundImage() == null) {
-                            val blackPaint = Paint()
-                            blackPaint.color = Color.BLACK
-                            blackPaint.style = Paint.Style.FILL
-                            canvas.drawRect(
-                                RectF(0f, 0f, width.toFloat(), height.toFloat()), blackPaint
-                            )
                         }
                         mediaUtils.drawMediaPlayer(canvas)
                         clockUtils.drawClock(canvas)
