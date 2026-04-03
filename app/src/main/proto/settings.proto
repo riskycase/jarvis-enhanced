@@ -7,6 +7,7 @@ message SettingsDataStore {
   optional int32 check_duration_milliseconds = 1;
   optional bool clear_notification_on_click = 2;
   optional string nasa_apod_api_key = 3;
+  repeated string blocked_music_packages = 4;
 }
 
 message SocketSettings {

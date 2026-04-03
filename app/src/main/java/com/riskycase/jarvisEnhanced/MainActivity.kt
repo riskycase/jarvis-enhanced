@@ -28,18 +28,24 @@ import com.riskycase.jarvisEnhanced.service.NotificationListener
 import com.riskycase.jarvisEnhanced.ui.screen.AddFilterScreen
 import com.riskycase.jarvisEnhanced.ui.screen.FiltersScreen
 import com.riskycase.jarvisEnhanced.ui.screen.HomeScreen
+import com.riskycase.jarvisEnhanced.ui.screen.MusicBlocklistScreen
+import com.riskycase.jarvisEnhanced.ui.screen.MusicStatsScreen
 import com.riskycase.jarvisEnhanced.ui.screen.SettingsScreen
 import com.riskycase.jarvisEnhanced.ui.screen.WallpaperPreviewScreen
 import com.riskycase.jarvisEnhanced.ui.theme.JarvisTheme
 import com.riskycase.jarvisEnhanced.util.Destinations.EDIT_FILTER
 import com.riskycase.jarvisEnhanced.util.Destinations.FILTERS
 import com.riskycase.jarvisEnhanced.util.Destinations.HOME
+import com.riskycase.jarvisEnhanced.util.Destinations.MUSIC_BLOCKLIST
+import com.riskycase.jarvisEnhanced.util.Destinations.MUSIC_STATS
 import com.riskycase.jarvisEnhanced.util.Destinations.SETTINGS
 import com.riskycase.jarvisEnhanced.util.Destinations.WALLPAPER_PREVIEW
 import com.riskycase.jarvisEnhanced.util.NotificationMaker
 import com.riskycase.jarvisEnhanced.viewModel.AddFilterViewModel
 import com.riskycase.jarvisEnhanced.viewModel.FilterViewModel
 import com.riskycase.jarvisEnhanced.viewModel.HomeViewModel
+import com.riskycase.jarvisEnhanced.viewModel.MusicBlocklistViewModel
+import com.riskycase.jarvisEnhanced.viewModel.MusicStatsViewModel
 import com.riskycase.jarvisEnhanced.viewModel.SettingsViewModel
 import com.riskycase.jarvisEnhanced.viewModel.WallpaperPreviewViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -70,6 +76,8 @@ class MainActivity : ComponentActivity() {
         val addFilterViewModel: AddFilterViewModel by viewModels()
         val settingsViewModel: SettingsViewModel by viewModels()
         val wallpaperPreviewViewModel: WallpaperPreviewViewModel by viewModels()
+        val musicStatsViewModel: MusicStatsViewModel by viewModels()
+        val musicBlocklistViewModel: MusicBlocklistViewModel by viewModels()
 
         setContent {
             val navController = rememberNavController()
@@ -93,6 +101,19 @@ class MainActivity : ComponentActivity() {
                                 onClick = {
                                     if(navController.currentBackStackEntry?.id != WALLPAPER_PREVIEW) navController.navigate(
                                         WALLPAPER_PREVIEW
+                                    )
+                                    scope.launch {
+                                        drawerState.close()
+                                    }
+                                })
+                            Divider()
+                            NavigationDrawerItem(label = {
+                                Text("Music Stats")
+                            },
+                                selected = navController.currentBackStackEntry?.id == MUSIC_STATS,
+                                onClick = {
+                                    if(navController.currentBackStackEntry?.id != MUSIC_STATS) navController.navigate(
+                                        MUSIC_STATS
                                     )
                                     scope.launch {
                                         drawerState.close()
@@ -183,6 +204,21 @@ class MainActivity : ComponentActivity() {
                         composable(WALLPAPER_PREVIEW) {
                             WallpaperPreviewScreen(
                                 wallpaperPreviewViewModel = wallpaperPreviewViewModel,
+                                navController = navController,
+                                drawerState = drawerState
+                            )
+                        }
+                        composable(MUSIC_STATS) {
+                            musicStatsViewModel.refreshStats()
+                            MusicStatsScreen(
+                                musicStatsViewModel = musicStatsViewModel,
+                                navController = navController,
+                                drawerState = drawerState
+                            )
+                        }
+                        composable(MUSIC_BLOCKLIST) {
+                            MusicBlocklistScreen(
+                                musicBlocklistViewModel = musicBlocklistViewModel,
                                 navController = navController,
                                 drawerState = drawerState
                             )

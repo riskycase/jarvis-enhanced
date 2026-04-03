@@ -24,6 +24,9 @@ import android.util.Base64
 import androidx.core.app.NotificationManagerCompat
 import com.google.gson.Gson
 import com.riskycase.jarvisEnhanced.R
+import com.riskycase.jarvisEnhanced.repository.MusicListenRepository
+import com.riskycase.jarvisEnhanced.models.MusicListenEntry
+import com.riskycase.jarvisEnhanced.datastore.settingsDataStore
 import com.riskycase.jarvisEnhanced.util.SocketChannels.MUSIC_ALBUM_ART_DETAILS
 import com.riskycase.jarvisEnhanced.util.SocketChannels.MUSIC_DETAILS
 import com.riskycase.jarvisEnhanced.util.SocketChannels.MusicCommands.NEXT
@@ -36,6 +39,8 @@ import com.riskycase.jarvisEnhanced.util.SocketIOTransport
 import com.riskycase.jarvisEnhanced.util.SystemServicesContainer
 import dagger.hilt.android.qualifiers.ApplicationContext
 
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayOutputStream
 import javax.inject.Inject
 import javax.inject.Named
@@ -52,12 +57,21 @@ class MediaUtils @Inject constructor(
     @Named("NotificationListenerServiceComponentName") private val notificationListenerServiceComponentName: ComponentName,
     private val systemServicesContainer: SystemServicesContainer,
     private val socketIOTransport: SocketIOTransport,
-    private val gson: Gson
+    private val gson: Gson,
+    private val musicListenRepository: MusicListenRepository
 ) {
 
     val handler = Handler(Looper.getMainLooper())
 
     private val musicDetailsMap: MutableMap<String, String> = HashMap()
+
+    // Music listen tracking state
+    private var currentTrackTitle: String? = null
+    private var currentTrackArtist: String? = null
+    private var currentTrackAlbum: String? = null
+    private var currentTrackPlayerPackage: String? = null
+    private var currentTrackPlayerName: String? = null
+    private var currentTrackStartTime: Long = 0L
 
     private val albumArtLock = Any()
 
@@ -145,6 +159,47 @@ class MediaUtils @Inject constructor(
             .contains(applicationContext.packageName)
     }
 
+    private fun isPackageBlocked(packageName: String): Boolean {
+        return runBlocking {
+            applicationContext.settingsDataStore.data.first().blockedMusicPackagesList
+                .contains(packageName)
+        }
+    }
+
+    private fun flushCurrentListen() {
+        val title = currentTrackTitle ?: return
+        val pkg = currentTrackPlayerPackage ?: return
+        if (isPackageBlocked(pkg)) return
+        val duration = System.currentTimeMillis() - currentTrackStartTime
+        if (duration < 5000) return // ignore listens under 5 seconds
+        Thread {
+            musicListenRepository.add(
+                MusicListenEntry(
+                    title = title,
+                    artist = currentTrackArtist ?: "Unknown",
+                    album = currentTrackAlbum ?: "Unknown",
+                    playerPackage = pkg,
+                    playerName = currentTrackPlayerName ?: "Unknown",
+                    startTime = currentTrackStartTime,
+                    durationMs = duration
+                )
+            )
+        }.start()
+        currentTrackTitle = null
+    }
+
+    private fun startTrackingListen(controller: MediaController) {
+        flushCurrentListen()
+        currentTrackTitle = controller.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
+        currentTrackArtist = controller.metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)
+        currentTrackAlbum = controller.metadata?.getString(MediaMetadata.METADATA_KEY_ALBUM)
+        currentTrackPlayerPackage = controller.packageName
+        currentTrackPlayerName = packageManager.getApplicationInfo(
+            controller.packageName, PackageManager.MATCH_ALL
+        ).loadLabel(packageManager).toString()
+        currentTrackStartTime = System.currentTimeMillis()
+    }
+
     fun setup() {
         mediaSessionManager.addOnActiveSessionsChangedListener(
             this::controllersUtilityFunction, notificationListenerServiceComponentName
@@ -157,10 +212,11 @@ class MediaUtils @Inject constructor(
     }
 
     private fun controllersUtilityFunction(controllers: List<MediaController>?) {
+        val allowed = controllers?.filter { !isPackageBlocked(it.packageName) }
         activeController =
-            controllers?.find { controller -> controller.playbackState?.isActive == true }
-        controllers?.forEach(this::registerCallbacksOnController)
-        controllers?.forEach(this::setDetailsFromController)
+            allowed?.find { controller -> controller.playbackState?.isActive == true }
+        allowed?.forEach(this::registerCallbacksOnController)
+        allowed?.forEach(this::setDetailsFromController)
         socketIOTransport.sendMessage(MUSIC_DETAILS, musicDetailsMap)
         setAlbumArtFromController(activeController)
     }
@@ -195,6 +251,7 @@ class MediaUtils @Inject constructor(
             val callback = object : MediaController.Callback() {
                 override fun onSessionDestroyed() {
                     super.onSessionDestroyed()
+                    if (activeController == controller) flushCurrentListen()
                     controllerCallbackMap.remove(controller.packageName)
                     musicDetailsMap.remove(controller.packageName)
                     socketIOTransport.sendMessage(MUSIC_DETAILS, musicDetailsMap)
@@ -203,6 +260,10 @@ class MediaUtils @Inject constructor(
 
                 override fun onPlaybackStateChanged(state: PlaybackState?) {
                     super.onPlaybackStateChanged(state)
+                    if (activeController == controller) {
+                        if (state?.isActive != true) flushCurrentListen()
+                        else if (currentTrackTitle == null) startTrackingListen(controller)
+                    }
                     if (state?.isActive == true) activeController = controller
                     updatePlaybackState(controller)
                     socketIOTransport.sendMessage(MUSIC_DETAILS, musicDetailsMap)
@@ -211,6 +272,9 @@ class MediaUtils @Inject constructor(
 
                 override fun onMetadataChanged(metadata: MediaMetadata?) {
                     super.onMetadataChanged(metadata)
+                    if (activeController == controller && controller.playbackState?.isActive == true) {
+                        startTrackingListen(controller)
+                    }
                     setDetailsFromController(controller)
                     socketIOTransport.sendMessage(MUSIC_DETAILS, musicDetailsMap)
                     if (activeController == controller) {
@@ -295,6 +359,7 @@ class MediaUtils @Inject constructor(
     fun sendFullUpdate() {
         if (hasPermissions()) {
             mediaSessionManager.getActiveSessions(notificationListenerServiceComponentName)
+                .filter { !isPackageBlocked(it.packageName) }
                 .forEach {
                     setDetailsFromController(it)
                 }

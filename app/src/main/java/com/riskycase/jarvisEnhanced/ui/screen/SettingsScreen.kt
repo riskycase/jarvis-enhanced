@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
 import com.riskycase.jarvisEnhanced.ui.components.TopBarComponent
+import com.riskycase.jarvisEnhanced.util.Destinations
 import com.riskycase.jarvisEnhanced.viewModel.SettingsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -205,6 +206,21 @@ fun SettingsScreen(
                 .padding(8.dp, 20.dp)
                 .fillMaxWidth(1f)) {
                 Text("Update server config", fontSize = 20.sp)
+            }
+            Text(
+                "Music Settings",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Black,
+                modifier = Modifier.padding(8.dp)
+            )
+            Column(modifier = Modifier
+                .clickable {
+                    navController.navigate(Destinations.MUSIC_BLOCKLIST)
+                }
+                .padding(8.dp, 20.dp)
+                .fillMaxWidth(1f)) {
+                Text("Blocked apps", fontSize = 20.sp)
+                Text("Hide apps from music player and tracking", fontSize = 14.sp, color = Color.Gray)
             }
         }
     }
